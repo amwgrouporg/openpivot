@@ -1,5 +1,6 @@
 // Case state. Lives in the browser only. Every record carries who asserted it and when.
-const KEY = "openpivot.case.v1";
+import { CASE_KEY_V1, CASE_KEY_V2, createEmptyCase, createLocalCaseRepository } from "./repository.js";
+
 export const ENTITY_TYPES = ["domain", "ip", "url", "org", "document", "claim"];
 export const LINK_STATUS = ["proposed", "accepted", "rejected"];
 export const ACTORS = ["human", "agent"];
@@ -9,27 +10,22 @@ export function uid(prefix) {
 }
 
 export function newCase(title = "Untitled case") {
-  return { version: 1, id: uid("case"), title, created_at: new Date().toISOString(), entities: [], links: [], evidence: [], readings: [], memo: { human: "", agent: "", agent_updated_at: null }, log: [] };
+  return createEmptyCase(title);
 }
 
 export function loadCase() {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) {
-      const c = JSON.parse(raw);
-      if (c && c.version === 1 && Array.isArray(c.entities)) return c;
-    }
-  } catch { /* storage unavailable or corrupt: start clean */ }
-  return newCase();
+  try { return createLocalCaseRepository(localStorage).load(); }
+  catch { return newCase(); }
 }
 
 export function saveCase(c) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(c));
-  } catch (e) {
+  try { createLocalCaseRepository(localStorage).save(c); }
+  catch (e) {
     console.warn("openpivot: could not persist case", e);
   }
 }
+
+export { CASE_KEY_V1, CASE_KEY_V2 };
 
 function assertActor(actor) {
   if (!ACTORS.includes(actor)) throw new Error(`actor outside vocabulary: ${actor}`);
@@ -92,6 +88,67 @@ export function addEntity(c, { type, value, notes }, actor) {
 
 export function findEntity(c, id) {
   return c.entities.find((e) => e.id === id) ?? null;
+}
+
+function ensureUi(c) {
+  c.ui ??= { selected_entity_id: null, graph_positions: {}, dismissed_candidates: [] };
+  c.ui.graph_positions ??= {};
+  c.ui.dismissed_candidates ??= [];
+  return c.ui;
+}
+
+export function dismissCandidate(c, key) {
+  const ui = ensureUi(c);
+  const value = String(key);
+  if (!ui.dismissed_candidates.includes(value)) ui.dismissed_candidates.push(value);
+}
+
+export function restoreCandidate(c, key) {
+  const ui = ensureUi(c);
+  ui.dismissed_candidates = ui.dismissed_candidates.filter((value) => value !== String(key));
+}
+
+export function addCompletedRun(c, run) {
+  if (!run?.completed_at) throw new Error("only completed runs can be stored");
+  c.runs ??= [];
+  c.runs.push(run);
+  if (c.runs.length > 100) c.runs.splice(0, c.runs.length - 100);
+  return run;
+}
+
+export function removeEntity(c, id, actor) {
+  assertActor(actor);
+  const entityIndex = c.entities.findIndex((entity) => entity.id === id);
+  if (entityIndex < 0) throw new Error("entity not found");
+  const snapshot = {
+    actor,
+    entityIndex,
+    entity: c.entities[entityIndex],
+    links: c.links.filter((item) => item.from === id || item.to === id),
+    readings: c.readings.filter((item) => item.entity_id === id),
+    evidenceEntityIds: c.evidence.map((item) => ({ id: item.id, entity_ids: [...item.entity_ids] })),
+  };
+  c.entities.splice(entityIndex, 1);
+  c.links = c.links.filter((item) => item.from !== id && item.to !== id);
+  c.readings = c.readings.filter((item) => item.entity_id !== id);
+  c.evidence.forEach((item) => { item.entity_ids = item.entity_ids.filter((entityId) => entityId !== id); });
+  if (c.ui?.selected_entity_id === id) c.ui.selected_entity_id = null;
+  log(c, actor, "remove_entity", id);
+  return snapshot;
+}
+
+export function restoreRemoval(c, snapshot) {
+  if (!snapshot?.entity?.id) throw new Error("invalid removal snapshot");
+  if (!findEntity(c, snapshot.entity.id)) c.entities.splice(snapshot.entityIndex, 0, snapshot.entity);
+  const linkIds = new Set(c.links.map((item) => item.id));
+  c.links.push(...snapshot.links.filter((item) => !linkIds.has(item.id)));
+  const readingIds = new Set(c.readings.map((item) => item.id));
+  c.readings.push(...snapshot.readings.filter((item) => !readingIds.has(item.id)));
+  for (const saved of snapshot.evidenceEntityIds) {
+    const evidence = c.evidence.find((item) => item.id === saved.id);
+    if (evidence) evidence.entity_ids = [...saved.entity_ids];
+  }
+  log(c, snapshot.actor, "restore_entity", snapshot.entity.id);
 }
 
 export function addLink(c, { from, to, rationale }, actor, status = "proposed") {
