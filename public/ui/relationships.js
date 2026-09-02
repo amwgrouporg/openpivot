@@ -10,7 +10,7 @@ function citationCard(citation) {
 
 function relationshipCard(caseData, relationship) {
   const view = relationshipView(caseData, relationship);
-  return `<article class="relationship-card card" data-relationship-id="${escapeHtml(view.id)}"><div class="relationship-status-line relationship-status-line--${escapeHtml(view.status)}"></div><div class="card-body">
+  return `<article class="relationship-card card" data-relationship-id="${escapeHtml(view.id)}" tabindex="-1"><div class="relationship-status-line relationship-status-line--${escapeHtml(view.status)}"></div><div class="card-body">
     <div class="relationship-card-head"><div class="relationship-route"><span>${typeBadge(view.from.type)}<strong class="selector">${escapeHtml(view.from.value)}</strong></span>${icon("arrow")}<span>${typeBadge(view.to.type)}<strong class="selector">${escapeHtml(view.to.value)}</strong></span></div>${statusBadge(view.status)}</div>
     <div class="rationale"><span class="eyebrow">Rationale</span><p>${escapeHtml(view.rationale)}</p></div>
     ${view.citations.length ? `<div class="citation-list">${view.citations.map(citationCard).join("")}</div>` : '<p class="uncited-note">No direct citation attached. Review the rationale carefully.</p>'}

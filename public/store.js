@@ -108,6 +108,15 @@ export function restoreCandidate(c, key) {
   ui.dismissed_candidates = ui.dismissed_candidates.filter((value) => value !== String(key));
 }
 
+export function updateEntityNotes(c, id, notes, actor) {
+  assertActor(actor);
+  const entity = findEntity(c, id);
+  if (!entity) throw new Error("entity not found");
+  entity.notes = String(notes ?? "").trim().slice(0, 2000);
+  log(c, actor, "edit_entity_notes", entity.id);
+  return entity;
+}
+
 export function addCompletedRun(c, run) {
   if (!run?.completed_at) throw new Error("only completed runs can be stored");
   c.runs ??= [];
@@ -127,11 +136,22 @@ export function removeEntity(c, id, actor) {
     links: c.links.filter((item) => item.from === id || item.to === id),
     readings: c.readings.filter((item) => item.entity_id === id),
     evidenceEntityIds: c.evidence.map((item) => ({ id: item.id, entity_ids: [...item.entity_ids] })),
+    evidenceReadingIds: c.evidence.map((item) => ({ id: item.id, reading_id: item.reading_id ?? null })),
+    runs: (c.runs ?? []).filter((item) => item.entity_id === id),
+    graphPosition: c.ui?.graph_positions?.[id] ?? null,
+    dismissedCandidates: [...(c.ui?.dismissed_candidates ?? [])],
   };
   c.entities.splice(entityIndex, 1);
   c.links = c.links.filter((item) => item.from !== id && item.to !== id);
   c.readings = c.readings.filter((item) => item.entity_id !== id);
-  c.evidence.forEach((item) => { item.entity_ids = item.entity_ids.filter((entityId) => entityId !== id); });
+  const removedReadingIds = new Set(snapshot.readings.map((item) => item.id));
+  c.evidence.forEach((item) => {
+    item.entity_ids = item.entity_ids.filter((entityId) => entityId !== id);
+    if (removedReadingIds.has(item.reading_id)) item.reading_id = null;
+  });
+  c.runs = (c.runs ?? []).filter((item) => item.entity_id !== id);
+  if (c.ui?.graph_positions) delete c.ui.graph_positions[id];
+  if (c.ui?.dismissed_candidates) c.ui.dismissed_candidates = c.ui.dismissed_candidates.filter((key) => !key.startsWith(`${id}:`));
   if (c.ui?.selected_entity_id === id) c.ui.selected_entity_id = null;
   log(c, actor, "remove_entity", id);
   return snapshot;
@@ -148,6 +168,14 @@ export function restoreRemoval(c, snapshot) {
     const evidence = c.evidence.find((item) => item.id === saved.id);
     if (evidence) evidence.entity_ids = [...saved.entity_ids];
   }
+  for (const saved of snapshot.evidenceReadingIds) {
+    const evidence = c.evidence.find((item) => item.id === saved.id);
+    if (evidence) evidence.reading_id = saved.reading_id;
+  }
+  c.runs ??= [];
+  c.runs.push(...snapshot.runs.filter((item) => !c.runs.some((run) => run.id === item.id)));
+  if (snapshot.graphPosition) c.ui.graph_positions[snapshot.entity.id] = snapshot.graphPosition;
+  c.ui.dismissed_candidates = [...snapshot.dismissedCandidates];
   log(c, snapshot.actor, "restore_entity", snapshot.entity.id);
 }
 
@@ -184,11 +212,15 @@ export function setLinkStatus(c, id, status, actor) {
   return link;
 }
 
-export function addEvidence(c, { entity_ids, url, quote, archived_url, reading_id = null }, actor) {
+export function addEvidence(c, { entity_ids, url, quote, archived_url, reading_id = null, archive_status, archive_check_url = null }, actor) {
   assertActor(actor);
   const ids = (Array.isArray(entity_ids) ? entity_ids : []).filter((id) => findEntity(c, id));
   if (reading_id && !c.readings.some((reading) => reading.id === reading_id)) throw new Error("reading not found");
-  const ev = { id: uid("evd"), entity_ids: ids, url: String(url ?? "").trim().slice(0, 2048), quote: String(quote ?? "").slice(0, 4000), captured_at: new Date().toISOString(), archived_url: archived_url ?? null, added_by: actor, untrusted: true, reading_id };
+  const evidenceQuote = String(quote ?? "").trim().slice(0, 4000);
+  if (!evidenceQuote) throw new Error("an exact evidence quote is required");
+  const resolvedArchiveStatus = archive_status ?? (archived_url ? "confirmed" : "not_requested");
+  if (!["not_requested", "pending", "confirmed"].includes(resolvedArchiveStatus)) throw new Error("invalid archive status");
+  const ev = { id: uid("evd"), entity_ids: ids, url: String(url ?? "").trim().slice(0, 2048), quote: evidenceQuote, captured_at: new Date().toISOString(), archived_url: archived_url ?? null, archive_status: resolvedArchiveStatus, archive_check_url: archive_check_url ?? null, added_by: actor, untrusted: true, reading_id };
   if (!isHttpUrl(ev.url)) throw new Error("url must be http(s)");
   if (ev.archived_url && !isHttpUrl(ev.archived_url)) ev.archived_url = null;
   c.evidence.push(ev);
@@ -301,31 +333,51 @@ export function candidatesFrom(c, entity, env) {
   return out.slice(0, 60);
 }
 
+function markdownText(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/([\\`*_[\]{}()#+!|])/g, "\\$1");
+}
+
+function markdownBody(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function markdownUrl(value) {
+  try {
+    const url = new URL(String(value));
+    if (!["http:", "https:"].includes(url.protocol)) return markdownText(value);
+    return url.href.replace(/</g, "%3C").replace(/>/g, "%3E");
+  } catch { return markdownText(value); }
+}
+
 export function exportMarkdown(c) {
   const e = (id) => findEntity(c, id);
   const lines = [];
-  lines.push(`# ${c.title}`, "", `Case ${c.id}. Created ${c.created_at}. Exported ${new Date().toISOString()}.`, "");
+  lines.push(`# ${markdownText(c.title)}`, "", `Case ${markdownText(c.id)}. Created ${markdownText(c.created_at)}. Exported ${new Date().toISOString()}.`, "");
   lines.push("## Entities", "");
-  for (const x of c.entities) lines.push(`- **${x.type}** ${x.value} (added by ${x.added_by}, ${x.added_at})${x.notes ? ` -- ${x.notes.replace(/\n/g, " ")}` : ""}`);
+  for (const x of c.entities) lines.push(`- **${markdownText(x.type)}** ${markdownText(x.value)} (added by ${markdownText(x.added_by)}, ${markdownText(x.added_at)})${x.notes ? ` -- ${markdownText(x.notes.replace(/\n/g, " "))}` : ""}`);
   lines.push("", "## Links", "");
   for (const l of c.links.filter((l) => l.status !== "rejected")) {
-    lines.push(`- ${e(l.from)?.value ?? l.from} -> ${e(l.to)?.value ?? l.to} [${l.status}, asserted by ${l.asserted_by}]: ${l.rationale}`);
+    lines.push(`- ${markdownText(e(l.from)?.value ?? l.from)} → ${markdownText(e(l.to)?.value ?? l.to)} [${markdownText(l.status)}, asserted by ${markdownText(l.asserted_by)}]: ${markdownText(l.rationale)}`);
     const sources = (l.citations ?? []).map((citation) => citation.kind === "reading"
       ? c.readings.find((reading) => reading.id === citation.id)?.source_url
       : c.evidence.find((evidence) => evidence.id === citation.id)?.url).filter(Boolean);
-    if (sources.length) lines.push(`  - Citations: ${sources.join(", ")}`);
+    if (sources.length) lines.push(`  - Citations: ${sources.map(markdownUrl).join(", ")}`);
   }
   const rejected = c.links.filter((l) => l.status === "rejected");
   if (rejected.length) {
     lines.push("", "### Rejected links", "");
-    for (const l of rejected) lines.push(`- ${e(l.from)?.value ?? l.from} -> ${e(l.to)?.value ?? l.to} (proposed by ${l.asserted_by}, rejected by ${l.reviewed_by}): ${l.rationale}`);
+    for (const l of rejected) lines.push(`- ${markdownText(e(l.from)?.value ?? l.from)} → ${markdownText(e(l.to)?.value ?? l.to)} (proposed by ${markdownText(l.asserted_by)}, rejected by ${markdownText(l.reviewed_by)}): ${markdownText(l.rationale)}`);
   }
   lines.push("", "## Evidence", "");
-  for (const v of c.evidence) lines.push(`- ${v.url}${v.archived_url ? ` (archived: ${v.archived_url})` : ""} -- captured ${v.captured_at} by ${v.added_by}; entities: ${v.entity_ids.map((id) => e(id)?.value ?? id).join(", ") || "none"}`, `  > ${v.quote.replace(/\n/g, "\n  > ")}`);
+  for (const v of c.evidence) lines.push(`- ${markdownUrl(v.url)}${v.archived_url ? ` (archived: ${markdownUrl(v.archived_url)})` : ""} -- captured ${markdownText(v.captured_at)} by ${markdownText(v.added_by)}; entities: ${v.entity_ids.map((id) => markdownText(e(id)?.value ?? id)).join(", ") || "none"}`, `  > ${markdownText(v.quote).replace(/\n/g, "\n  > ")}`);
   lines.push("", "## Sensor readings", "");
-  for (const r of c.readings) lines.push(`- ${e(r.entity_id)?.value ?? r.entity_id} / ${r.sensor} [${r.status}] ${r.fetched_at}: ${r.summary}${r.source_url ? ` <${r.source_url}>` : ""}`);
-  lines.push("", "## Findings memo", "", "### Analyst", "", c.memo.human || "(empty)", "", `### Agent${c.memo.agent_updated_at ? ` (updated ${c.memo.agent_updated_at})` : ""}`, "", c.memo.agent || "(empty)", "");
+  for (const r of c.readings) lines.push(`- ${markdownText(e(r.entity_id)?.value ?? r.entity_id)} / ${markdownText(r.sensor)} [${markdownText(r.status)}] ${markdownText(r.fetched_at)}: ${markdownText(r.summary)}${r.source_url ? ` <${markdownUrl(r.source_url)}>` : ""}`);
+  lines.push("", "## Findings memo", "", "### Analyst", "", markdownBody(c.memo.human) || "(empty)", "", `### Agent${c.memo.agent_updated_at ? ` (updated ${markdownText(c.memo.agent_updated_at)})` : ""}`, "", markdownBody(c.memo.agent) || "(empty)", "");
   lines.push("## Log", "");
-  for (const l of c.log.slice(0, 100)) lines.push(`- ${l.ts} ${l.actor} ${l.action}: ${l.detail}`);
+  for (const l of c.log.slice(0, 100)) lines.push(`- ${markdownText(l.ts)} ${markdownText(l.actor)} ${markdownText(l.action)}: ${markdownText(l.detail)}`);
   return lines.join("\n");
 }

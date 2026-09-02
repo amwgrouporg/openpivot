@@ -2,10 +2,14 @@ import { actorBadge, escapeHtml, formatTime, icon, safeLink, sectionHeader, type
 
 function evidenceCard(caseData, evidence) {
   const entities = evidence.entity_ids.map((id) => caseData.entities.find((entity) => entity.id === id)).filter(Boolean);
-  const archive = evidence.archived_url ? `<div class="archive-state archive-state--ok">${icon("check")}Archived copy confirmed ${safeLink(evidence.archived_url, "Open archive")}</div>` : '<div class="archive-state">No archived copy attached</div>';
+  const archive = evidence.archived_url
+    ? `<div class="archive-state archive-state--ok">${icon("check")}Archived copy confirmed ${safeLink(evidence.archived_url, "Open archive")}</div>`
+    : evidence.archive_status === "pending"
+      ? `<div class="archive-state archive-state--pending">${icon("warning")}Archive request sent; confirmation pending ${safeLink(evidence.archive_check_url, "Check archive")}</div>`
+      : '<div class="archive-state">No archived copy requested</div>';
   return `<article class="evidence-card card"><div class="card-body">
     <div class="evidence-card-head"><div>${safeLink(evidence.url, "Primary source")}<span class="captured-time">Captured ${escapeHtml(formatTime(evidence.captured_at))}</span></div>${actorBadge(evidence.added_by)}</div>
-    <blockquote>${escapeHtml(evidence.quote)}</blockquote>
+    <div class="untrusted evidence-quote"><div class="untrusted-label">${icon("warning")}Untrusted source material</div><blockquote>${escapeHtml(evidence.quote)}</blockquote></div>
     <div class="evidence-entities">${entities.map((entity) => `<span>${typeBadge(entity.type)}<span class="selector">${escapeHtml(entity.value)}</span></span>`).join("") || '<span class="dim">No linked entities</span>'}</div>
     ${archive}
   </div></article>`;

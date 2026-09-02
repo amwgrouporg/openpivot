@@ -99,12 +99,15 @@ export function createToolset({ getCase, persist, registry, archiveUrl, runEntit
     {
       name: "attach_evidence",
       description: "Record a piece of evidence: a source URL, the exact quote that supports a claim, and the entities it concerns. Optionally submit the URL to the Wayback Machine for an archived copy.",
-      inputSchema: obj({ entity_ids: { type: "array", items: { type: "string" }, description: "Entity ids this evidence concerns" }, url: str("Source URL"), quote: str("Verbatim excerpt from the source"), archive: { type: "boolean", description: "Submit to the Wayback Machine and store the archived URL" }, reading_id: str("Optional reading id this evidence was created from") }, ["url", "quote"]),
+      inputSchema: obj({ entity_ids: { type: "array", items: { type: "string" }, description: "Entity ids this evidence concerns" }, url: str("Source URL"), quote: { type: "string", minLength: 1, description: "Nonblank verbatim excerpt from the source" }, archive: { type: "boolean", description: "Submit to the Wayback Machine and store the archived URL" }, reading_id: str("Optional reading id this evidence was created from") }, ["url", "quote"]),
       async execute({ entity_ids, url, quote, archive, reading_id }) {
-        const archivedUrl = archive ? await archiveUrl(url) : null;
-        const evidence = addEvidence(getCase(), { entity_ids, url, quote, archived_url: archivedUrl, reading_id }, "agent");
+        const archiveResult = archive ? await archiveUrl(url) : null;
+        const archiveFields = typeof archiveResult === "string"
+          ? { archived_url: archiveResult, archive_status: "confirmed", archive_check_url: null }
+          : archiveResult ?? { archived_url: null, archive_status: "not_requested", archive_check_url: null };
+        const evidence = addEvidence(getCase(), { entity_ids, url, quote, reading_id, ...archiveFields }, "agent");
         await afterMutation();
-        return { evidence, archived: Boolean(archivedUrl), archive_note: archive && !archivedUrl ? "Archive request did not return a snapshot URL; it may still complete." : undefined };
+        return { evidence, archived: Boolean(evidence.archived_url), archive_note: archive && !evidence.archived_url ? "Archive request did not return a snapshot URL; it may still complete." : undefined };
       },
     },
     {

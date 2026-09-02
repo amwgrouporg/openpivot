@@ -119,12 +119,16 @@ export function createGraph(svgEl, options = {}) {
     allNodes.select("text").text((item) => item.value.length > 30 ? `${item.value.slice(0, 28)}…` : item.value);
     allNodes.select("title").text((item) => `${item.type}: ${item.value} (added by ${item.added_by})`);
 
-    simulation.nodes(nodes).on("tick", () => {
+    const paint = () => {
       allLinks.attr("x1", (item) => item.source.x).attr("y1", (item) => item.source.y).attr("x2", (item) => item.target.x).attr("y2", (item) => item.target.y);
       allNodes.attr("transform", (item) => `translate(${item.x},${item.y})`);
-    });
+    };
+    simulation.nodes(nodes).on("tick", paint);
     simulation.force("link").links(links);
-    simulation.alpha(reducedMotion ? 0.2 : 0.55).restart();
+    if (reducedMotion) {
+      simulation.alpha(1).tick(80).stop();
+      paint();
+    } else simulation.alpha(0.55).restart();
   }
 
   function fit() {

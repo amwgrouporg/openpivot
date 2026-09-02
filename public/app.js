@@ -8,11 +8,11 @@ import { createToolset } from "./tools.js";
 import { PIVOT_SPECS, runPivot } from "./runs.js";
 import { createGraph } from "./graph.js";
 import { buildReviewQueue, candidateKey, evidenceDraftFromReading, visibleCandidates } from "./ui/view-models.js";
-import { escapeHtml, icon, statusBadge } from "./ui/components.js";
+import { escapeHtml, icon } from "./ui/components.js";
 import { renderShell } from "./ui/shell.js";
 import { renderOverview } from "./ui/overview.js";
 import { renderEntities } from "./ui/entities.js";
-import { createCaseActions, parseCandidate } from "./ui/events.js";
+import { captureFormState, createCaseActions, parseCandidate, restoreFormState } from "./ui/events.js";
 import { renderRelationships } from "./ui/relationships.js";
 import { renderEvidence } from "./ui/evidence.js";
 import { renderReport } from "./ui/report.js";
@@ -30,13 +30,16 @@ const ui = {
   selected: caseData.ui?.selected_entity_id ?? null,
   activeRun: null,
   candidates: new Map(),
-  notice: "",
+  notice: repository.getRecoveryNotice(),
   modal: null,
   toast: null,
   activityOpen: false,
   evidenceDraft: null,
   relationshipFilter: "all",
-  graphFilters: { status: "active" },
+  graphFilters: { status: "active", types: [], connected: false },
+  returnFocus: null,
+  focusRelationship: null,
+  skipFormRestore: false,
 };
 
 function hydrateCandidates() {
@@ -71,7 +74,6 @@ function setUi(patch) {
 function persist() {
   caseData.ui.selected_entity_id = ui.selected;
   repository.save(caseData);
-  toolset?.syncDynamicTools();
   render();
 }
 
@@ -99,7 +101,11 @@ async function executeEntityPivot(entity, type, archive = false, actor = "human"
 
 async function archiveUrl(url) {
   const envelope = await sensor("archive", {}, { method: "POST", body: { url } });
-  return envelope.status === "ok" ? envelope.data?.archived_url ?? null : null;
+  return {
+    archived_url: envelope.status === "ok" ? envelope.data?.archived_url ?? null : null,
+    archive_status: envelope.status === "ok" && envelope.data?.archived_url ? "confirmed" : envelope.data?.submitted ? "pending" : "not_requested",
+    archive_check_url: envelope.data?.check_url ?? null,
+  };
 }
 
 const actions = createCaseActions({
@@ -111,7 +117,7 @@ const actions = createCaseActions({
 
 toolset = createToolset({
   getCase: () => caseData,
-  persist,
+  persist() { actions.invalidateUndo(); persist(); },
   registry,
   archiveUrl,
   runEntityPivot: (entity, type, archive) => executeEntityPivot(entity, type, archive, "agent"),
@@ -129,10 +135,6 @@ function counts(queue) {
   };
 }
 
-function placeholder(title, body) {
-  return `<section class="placeholder-view"><span class="eyebrow">Workspace</span><h1>${escapeHtml(title)}</h1><p>${escapeHtml(body)}</p></section>`;
-}
-
 function activityWorkbench() {
   return `<div class="workbench-head"><div><span class="eyebrow">Case ledger</span><h2>Activity</h2></div><button class="button button--quiet icon-button" type="button" data-action="close-activity" aria-label="Close activity">${icon("close")}</button></div><div class="activity-log">${caseData.log.map((entry) => `<div class="activity-entry"><strong>${escapeHtml(entry.action)} · ${escapeHtml(entry.actor)}</strong><span>${escapeHtml(entry.detail)}</span></div>`).join("") || '<div class="quiet-empty">No activity yet.</div>'}</div>`;
 }
@@ -146,7 +148,7 @@ function modalHtml() {
 
 function toastHtml() {
   if (!ui.toast) return "";
-  return `<div class="toast"><span>${escapeHtml(ui.toast.message)}</span>${ui.toast.undo ? '<button class="button button--small button--ghost" type="button" data-action="undo-removal">Undo</button>' : ""}<button class="button button--quiet icon-button" type="button" data-action="dismiss-toast" aria-label="Dismiss notification">${icon("close")}</button></div>`;
+  return `<div class="toast"><span>${escapeHtml(ui.toast.message)}</span>${ui.toast.undo ? '<button class="button button--small button--ghost" type="button" data-action="undo-removal">Undo</button>' : ""}${ui.toast.restoreCandidateKey ? `<button class="button button--small button--ghost" type="button" data-action="restore-candidate" data-key="${escapeHtml(ui.toast.restoreCandidateKey)}">Restore</button>` : ""}<button class="button button--quiet icon-button" type="button" data-action="dismiss-toast" aria-label="Dismiss notification">${icon("close")}</button></div>`;
 }
 
 function activeContent(queue, webmcpState) {
@@ -161,6 +163,8 @@ function activeContent(queue, webmcpState) {
 }
 
 function render() {
+  const formState = ui.skipFormRestore ? null : captureFormState(app);
+  ui.skipFormRestore = false;
   graph?.destroy?.();
   graph = null;
   const queue = buildReviewQueue(caseData, ui.candidates);
@@ -178,20 +182,49 @@ function render() {
   });
   app.querySelector("[data-modal-host]").innerHTML = modalHtml();
   app.querySelector("[data-toast-host]").innerHTML = toastHtml();
+  restoreFormState(app, formState);
+  const modal = app.querySelector("[role='dialog']");
+  if (modal) {
+    for (const region of app.querySelectorAll(".topbar, .side-rail, .workspace-frame, .bottom-nav, .connection-bar")) {
+      region.inert = true;
+      region.setAttribute("inert", "");
+      region.setAttribute("aria-hidden", "true");
+    }
+    modal.querySelector("button")?.focus();
+  }
+  if (ui.focusRelationship) {
+    app.querySelector(`[data-relationship-id="${CSS.escape(ui.focusRelationship)}"]`)?.focus();
+    ui.focusRelationship = null;
+  }
   if (ui.view === "entities") {
     const svg = document.getElementById("graph");
     if (svg) {
       graph = createGraph(svg, {
         onSelectEntity: (id) => { ui.selected = id; caseData.ui.selected_entity_id = id; render(); },
-        onSelectLink: () => { ui.view = "relationships"; ui.relationshipFilter = "all"; render(); },
-        onPositionsChange: (positions) => { caseData.ui.graph_positions = positions; repository.save(caseData); },
+        onSelectLink: (id) => { ui.view = "relationships"; ui.relationshipFilter = "all"; ui.focusRelationship = id; render(); },
+        onPositionsChange: (positions) => { actions.invalidateUndo(); caseData.ui.graph_positions = positions; repository.save(caseData); },
         reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
       });
       graph.select(ui.selected);
       const status = ui.graphFilters.status;
-      graph.update(caseData, status === "all" ? { includeRejected: true } : status === "active" ? {} : { statuses: [status] });
+      const filters = status === "all" ? { includeRejected: true } : status === "active" ? {} : { statuses: [status] };
+      filters.types = ui.graphFilters.types;
+      if (ui.graphFilters.connected && ui.selected) filters.connectedTo = ui.selected;
+      graph.update(caseData, filters);
     }
   }
+}
+
+function consumeCandidate(parentId, candidate) {
+  const key = candidateKey(parentId, candidate);
+  ui.candidates.set(parentId, (ui.candidates.get(parentId) ?? []).filter((item) => candidateKey(parentId, item) !== key));
+}
+
+function restoreReturnFocus() {
+  const target = ui.returnFocus;
+  ui.returnFocus = null;
+  if (!target) return;
+  requestAnimationFrame(() => app.querySelector(target)?.focus());
 }
 
 function download(text, type, filename) {
@@ -215,17 +248,28 @@ app.addEventListener("submit", async (event) => {
   const formData = new FormData(form);
   const data = Object.fromEntries(formData.entries());
   try {
-    if (form.dataset.form === "add-entity") actions.addEntity({ type: data.type, value: data.value, notes: data.notes });
+    if (form.dataset.form === "add-entity") {
+      ui.skipFormRestore = true;
+      actions.addEntity({ type: data.type, value: data.value, notes: data.notes });
+      await toolset.syncDynamicTools();
+    }
     if (form.dataset.form === "add-relationship") {
+      ui.skipFormRestore = true;
       actions.createRelationship({ from: data.from, to: data.to, rationale: data.rationale, citations: [] });
       ui.toast = { message: "Relationship added to the review queue", undo: false };
       render();
     }
     if (form.dataset.form === "attach-evidence") {
-      const archivedUrl = data.archive ? await archiveUrl(data.url) : null;
-      actions.attachEvidence({ entity_ids: formData.getAll("entity_ids"), url: data.url, quote: data.quote, reading_id: data.reading_id || null, archived_url: archivedUrl });
+      ui.skipFormRestore = true;
+      const archiveResult = data.archive ? await archiveUrl(data.url) : { archived_url: null, archive_status: "not_requested", archive_check_url: null };
+      actions.attachEvidence({ entity_ids: formData.getAll("entity_ids"), url: data.url, quote: data.quote, reading_id: data.reading_id || null, ...archiveResult });
       ui.evidenceDraft = null;
-      ui.toast = { message: data.archive && !archivedUrl ? "Evidence attached; archive confirmation is pending" : "Evidence attached", undo: false };
+      ui.toast = { message: data.archive && archiveResult.archive_status === "pending" ? "Evidence attached; archive confirmation is pending" : "Evidence attached", undo: false };
+      render();
+    }
+    if (form.dataset.form === "edit-notes") {
+      actions.editEntityNotes(data.entity_id, data.notes);
+      ui.toast = { message: "Entity notes updated", undo: false };
       render();
     }
   }
@@ -234,6 +278,7 @@ app.addEventListener("submit", async (event) => {
 
 app.addEventListener("change", (event) => {
   if (event.target.id === "case-title") {
+    actions.invalidateUndo();
     caseData.title = event.target.value.trim() || "Untitled case";
     log(caseData, "human", "rename_case", caseData.title);
     persist();
@@ -249,19 +294,21 @@ app.addEventListener("change", (event) => {
   if (event.target.dataset.action === "import-json") {
     const file = event.target.files?.[0];
     if (!file) return;
-    file.text().then((text) => {
+    file.text().then(async (text) => {
       caseData = repository.importJson(text);
       ui.selected = caseData.ui.selected_entity_id;
       ui.view = "overview";
       ui.evidenceDraft = null;
       hydrateCandidates();
       persist();
+      await toolset.syncDynamicTools();
     }).catch(showError);
   }
 });
 
 app.addEventListener("input", (event) => {
   if (event.target.id !== "memo-human") return;
+  actions.invalidateUndo();
   caseData.memo.human = event.target.value;
   repository.save(caseData);
 });
@@ -270,6 +317,23 @@ app.addEventListener("focusout", (event) => {
   if (event.target.id !== "memo-human") return;
   log(caseData, "human", "write_memo", `${caseData.memo.human.length} chars`);
   persist();
+});
+
+app.addEventListener("keydown", (event) => {
+  const modal = event.target.closest?.("[role='dialog']");
+  if (event.key === "Escape" && ui.modal) {
+    event.preventDefault();
+    ui.modal = null;
+    render();
+    restoreReturnFocus();
+    return;
+  }
+  if (event.key !== "Tab" || !modal) return;
+  const controls = [...modal.querySelectorAll("button, input, select, textarea, [href]")].filter((control) => !control.disabled);
+  if (!controls.length) return;
+  const first = controls[0], last = controls.at(-1);
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 });
 
 app.addEventListener("click", async (event) => {
@@ -289,11 +353,25 @@ app.addEventListener("click", async (event) => {
     if (graphAction === "reset") graph?.resetLayout?.();
     return;
   }
+  const graphType = event.target.closest("[data-graph-type]")?.dataset.graphType;
+  if (graphType) {
+    const types = new Set(ui.graphFilters.types);
+    if (types.has(graphType)) types.delete(graphType); else types.add(graphType);
+    ui.graphFilters.types = [...types];
+    render();
+    return;
+  }
+  if (event.target.closest("[data-graph-connected]")) {
+    ui.graphFilters.connected = !ui.graphFilters.connected;
+    render();
+    return;
+  }
   const element = event.target.closest("[data-action]");
   if (!element) return;
   const { action, id } = element.dataset;
   try {
     if (action === "export-markdown") {
+      actions.invalidateUndo();
       const filename = `${caseData.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "case"}.md`;
       download(exportMarkdown(caseData), "text/markdown", filename);
       log(caseData, "human", "export_case", filename);
@@ -303,34 +381,36 @@ app.addEventListener("click", async (event) => {
       const filename = `${caseData.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "case"}.json`;
       download(repository.exportJson(caseData), "application/json", filename);
     }
-    if (action === "new-case") { ui.modal = { kind: "new-case" }; render(); }
-    if (action === "confirm-new-case") { caseData = repository.create(); ui.selected = null; ui.candidates.clear(); ui.modal = null; ui.view = "overview"; persist(); }
-    if (action === "cancel-modal") { ui.modal = null; render(); }
+    if (action === "new-case") { ui.returnFocus = '[data-action="new-case"]'; ui.modal = { kind: "new-case" }; render(); }
+    if (action === "confirm-new-case") { caseData = repository.create(); ui.selected = null; ui.candidates.clear(); ui.modal = null; ui.view = "overview"; ui.skipFormRestore = true; actions.invalidateUndo(); persist(); await toolset.syncDynamicTools(); }
+    if (action === "cancel-modal") { ui.modal = null; render(); restoreReturnFocus(); }
     if (action === "select-entity") { actions.selectEntity(id); ui.view = "entities"; render(); }
     if (action === "close-workbench") { ui.selected = null; caseData.ui.selected_entity_id = null; persist(); }
-    if (action === "run-pivot") await actions.runPivot(id, false);
-    if (action === "run-pivot-archive") await actions.runPivot(id, true);
-    if (action === "add-candidate") actions.addCandidate(element.dataset.parent, parseCandidate(element));
-    if (action === "add-propose-candidate") actions.addAndProposeCandidate(element.dataset.parent, parseCandidate(element));
+    if (action === "run-pivot") { actions.invalidateUndo(); await actions.runPivot(id, false); }
+    if (action === "run-pivot-archive") { actions.invalidateUndo(); await actions.runPivot(id, true); }
+    if (action === "add-candidate") { const candidate = parseCandidate(element); actions.addCandidate(element.dataset.parent, candidate); consumeCandidate(element.dataset.parent, candidate); await toolset.syncDynamicTools(); render(); }
+    if (action === "add-propose-candidate") { const candidate = parseCandidate(element); actions.addAndProposeCandidate(element.dataset.parent, candidate); consumeCandidate(element.dataset.parent, candidate); await toolset.syncDynamicTools(); render(); }
     if (action === "dismiss-candidate") {
       const candidate = parseCandidate(element);
       const key = candidateKey(element.dataset.parent, candidate);
       actions.dismissCandidate(element.dataset.parent, candidate, key);
-      ui.toast = { message: `${candidate.value} dismissed`, undo: false };
+      ui.toast = { message: `${candidate.value} dismissed`, undo: false, restoreCandidateKey: key };
       render();
     }
+    if (action === "restore-candidate") { actions.restoreCandidate(element.dataset.key); ui.toast = { message: "Candidate restored", undo: false }; render(); }
     if (action === "request-remove-entity") {
       const entity = findEntity(caseData, id);
+      ui.returnFocus = `[data-action="request-remove-entity"][data-id="${CSS.escape(id)}"]`;
       ui.modal = { kind: "remove", id, label: entity.value, affected: { links: caseData.links.filter((link) => link.from === id || link.to === id).length, readings: caseData.readings.filter((reading) => reading.entity_id === id).length, evidence: caseData.evidence.filter((evidence) => evidence.entity_ids.includes(id)).length } };
       render();
     }
-    if (action === "confirm-remove-entity") { actions.removeEntity(id); ui.modal = null; ui.toast = { message: "Entity removed", undo: true }; render(); }
-    if (action === "undo-removal") { actions.undoRemoval(); ui.toast = { message: "Entity restored", undo: false }; render(); }
+    if (action === "confirm-remove-entity") { actions.removeEntity(id); ui.modal = null; ui.toast = { message: "Entity removed", undo: true }; await toolset.syncDynamicTools(); render(); }
+    if (action === "undo-removal") { actions.undoRemoval(); ui.toast = { message: "Entity restored", undo: false }; await toolset.syncDynamicTools(); render(); }
     if (action === "dismiss-toast") { ui.toast = null; render(); }
     if (action === "dismiss-notice") { ui.notice = ""; render(); }
     if (action === "toggle-activity") { ui.activityOpen = true; render(); }
     if (action === "close-activity") { ui.activityOpen = false; render(); }
-    if (action === "open-relationship") { ui.view = "relationships"; ui.relationshipFilter = "proposed"; render(); }
+    if (action === "open-relationship") { ui.view = "relationships"; ui.relationshipFilter = "all"; ui.focusRelationship = id; render(); }
     if (action === "accept-relationship") { actions.setRelationshipStatus(id, "accepted"); ui.toast = { message: "Relationship accepted", undo: false }; render(); }
     if (action === "reject-relationship") { actions.setRelationshipStatus(id, "rejected"); ui.toast = { message: "Relationship rejected", undo: false }; render(); }
     if (action === "evidence-from-reading") { ui.evidenceDraft = evidenceDraftFromReading(caseData, id); ui.view = "evidence"; render(); }

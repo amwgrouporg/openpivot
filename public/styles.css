@@ -220,6 +220,12 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
 .entity-add .field:nth-child(2) { grid-template-columns: 1fr 180px; }
 .entity-add .field:nth-child(2) label { grid-column: 1 / -1; }
 .entity-workspace { min-height: 520px; display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 12px; }
+.graph-filter-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.graph-filter-bar > .eyebrow { margin-right: 3px; }
+.filter-chip { min-height: 28px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; background: transparent; color: var(--muted); cursor: pointer; font-size: 10px; }
+.filter-chip:hover, .filter-chip.is-active { border-color: rgba(105,169,255,.5); background: var(--blue-wash); color: var(--text); }
+.filter-chip:disabled { opacity: .38; cursor: default; }
+.filter-chip .badge { border: 0; padding: 0; }
 .graph-card { position: relative; min-height: 520px; overflow: hidden; background-color: var(--ink-0); background-image: radial-gradient(rgba(73,96,122,.38) .75px, transparent .75px); background-size: 24px 24px; }
 .graph-toolbar { position: absolute; inset: 10px 10px auto; z-index: 2; display: flex; align-items: center; justify-content: space-between; pointer-events: none; color: var(--muted); font: 10px var(--mono); }
 .graph-toolbar > div { display: flex; gap: 5px; pointer-events: auto; }

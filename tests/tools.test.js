@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createToolset } from "../public/tools.js";
 import { newCase } from "../public/store.js";
+import { createRegistry } from "../public/webmcp.js";
 
 function registryDouble() {
   const tools = new Map();
@@ -87,6 +88,25 @@ test("legacy evidence input remains valid", async () => {
   assert.equal(result.archived, false);
 });
 
+test("archive submission state survives evidence attachment", async () => {
+  const caseData = newCase("Archive evidence");
+  const registry = registryDouble();
+  const toolset = createToolset({
+    getCase: () => caseData,
+    persist() {},
+    registry,
+    async archiveUrl() { return { archive_status: "pending", archived_url: null, archive_check_url: "https://web.archive.org/web/*/https://example.com/source" }; },
+    async runEntityPivot() { return { readings: [], candidates: [] }; },
+  });
+  await toolset.registerStaticTools();
+
+  const result = await registry.tools.get("attach_evidence").execute({ url: "https://example.com/source", quote: "Example quote", archive: true });
+
+  assert.equal(result.evidence.archive_status, "pending");
+  assert.equal(result.evidence.archive_check_url, "https://web.archive.org/web/*/https://example.com/source");
+  assert.equal(result.archived, false);
+});
+
 test("removing the final typed entity unregisters its pivot", async () => {
   const { caseData, registry, toolset } = harness();
   caseData.entities.push({ id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
@@ -98,4 +118,36 @@ test("removing the final typed entity unregisters its pivot", async () => {
   await toolset.syncDynamicTools();
   assert.equal(registry.has("pivot_domain"), false);
   assert.equal(registry.names().length, 10);
+});
+
+test("add_entity waits for delayed dynamic registration before returning", async () => {
+  const caseData = newCase("Delayed registration");
+  let releasePivot;
+  const registered = new Map();
+  const modelContext = {
+    async registerTool(tool) {
+      if (tool.name === "pivot_domain") await new Promise((resolve) => { releasePivot = resolve; });
+      registered.set(tool.name, tool);
+    },
+    unregisterTool(name) { registered.delete(name); },
+  };
+  const registry = createRegistry(modelContext);
+  const toolset = createToolset({
+    getCase: () => caseData,
+    persist() {},
+    registry,
+    async archiveUrl() { return null; },
+    async runEntityPivot() { return { readings: [], candidates: [] }; },
+  });
+  await toolset.registerStaticTools();
+  let settled = false;
+
+  const call = registered.get("add_entity").execute({ type: "domain", value: "example.com" }).then(() => { settled = true; });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(settled, false);
+  assert.equal(registry.names().length, 10);
+
+  releasePivot();
+  await call;
+  assert.equal(registry.names().length, 11);
 });

@@ -103,7 +103,19 @@ No natural-person pivots: no username sweeps, no email-to-profile, no people sea
 data, no biometrics. Entities are domains, IPs, URLs, organizations, documents and claims.
 No accounts, no server-side storage: the case lives in your browser until you export it.
 
-## Layout
+## Investigation cockpit
+
+The interface is organized around decisions rather than raw tables:
+
+- **Overview** prioritizes proposed relationships, indeterminate readings and new candidates.
+- **Entities** combines a filterable graph, entity browser, sensor progress, readings and candidate actions.
+- **Relationships** keeps rationale, citations and the human verdict together.
+- **Evidence** records exact untrusted quotes, sources, linked entities and archive state.
+- **Report** separates analyst conclusions from the agent draft and exports Markdown or lossless JSON.
+
+Cases remain local to the browser. Existing v1 cases migrate to a validated v2 record while the original value remains available as a recovery backup.
+
+## Repository layout
 
 ```
 public/    board: index.html, app.js (tools + UI), store.js (ledger), graph.js (D3), webmcp.js

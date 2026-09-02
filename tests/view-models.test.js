@@ -93,3 +93,24 @@ test("link and evidence operations accept citation references and export them", 
   assert.match(markdown, /cloudflare-dns\.com/);
   assert.match(markdown, /example\.com\/source/);
 });
+
+test("evidence requires a nonblank exact quote", () => {
+  const caseData = fixtureCase();
+  assert.throws(() => addEvidence(caseData, { entity_ids: ["ent_domain"], url: "https://example.com/source", quote: "   " }, "agent"), /quote/i);
+});
+
+test("markdown export renders untrusted fields literally", () => {
+  const caseData = fixtureCase();
+  caseData.entities[0].notes = "<script>alert(1)</script> *not emphasis*";
+  caseData.links[0].rationale = "[click](javascript:alert(1))";
+  caseData.readings[0].summary = "<img src=x onerror=alert(1)>";
+  caseData.evidence = [{ id: "evd_1", entity_ids: ["ent_domain"], url: "https://example.com/source", quote: "# heading\n<script>alert(1)</script>", captured_at: "2026-09-01T10:00:00.000Z", archived_url: null, added_by: "agent", untrusted: true, reading_id: null }];
+
+  const markdown = exportMarkdown(caseData);
+
+  assert.doesNotMatch(markdown, /<script>/);
+  assert.doesNotMatch(markdown, /<img /);
+  assert.doesNotMatch(markdown, /\[click\]\(javascript:/);
+  assert.match(markdown, /\\\*not emphasis\\\*/);
+  assert.match(markdown, /\\# heading/);
+});

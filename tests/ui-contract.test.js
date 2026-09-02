@@ -4,7 +4,7 @@ import { actorBadge, safeLink, statusBadge, typeBadge } from "../public/ui/compo
 import { renderShell } from "../public/ui/shell.js";
 import { renderOverview } from "../public/ui/overview.js";
 import { renderEntities } from "../public/ui/entities.js";
-import { createCaseActions } from "../public/ui/events.js";
+import { captureFormState, createCaseActions, restoreFormState } from "../public/ui/events.js";
 import { renderRelationships } from "../public/ui/relationships.js";
 import { renderEvidence } from "../public/ui/evidence.js";
 import { renderReport } from "../public/ui/report.js";
@@ -100,6 +100,8 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
 
   assert.match(rendered.contentHtml, /id="graph"/);
   assert.match(rendered.contentHtml, /data-control="graph-status-filter"/);
+  assert.match(rendered.contentHtml, /data-graph-type="domain"/);
+  assert.match(rendered.contentHtml, /data-graph-connected/);
   assert.match(rendered.contentHtml, /data-graph-semantic/);
   assert.match(rendered.workbenchHtml, /example\.com/);
   assert.match(rendered.workbenchHtml, /dns/);
@@ -153,6 +155,17 @@ test("evidence draft prefills provenance while leaving the exact quote empty", (
   assert.match(html, /value="ent_1" selected/);
 });
 
+test("evidence renders submitted archive state and an explicit untrusted label", () => {
+  const caseData = newCase("Archive state");
+  caseData.evidence.push({ id: "evd_1", entity_ids: [], url: "https://example.com/source", quote: "Quoted source text", captured_at: "2026-09-01T10:00:00.000Z", archived_url: null, archive_status: "pending", archive_check_url: "https://web.archive.org/web/*/https://example.com/source", added_by: "agent", untrusted: true, reading_id: null });
+
+  const html = renderEvidence({ caseData, draft: null });
+
+  assert.match(html, /Archive request sent; confirmation pending/);
+  assert.match(html, /web\.archive\.org/);
+  assert.match(html, /Untrusted source material/);
+});
+
 test("report keeps analyst editing separate from the agent draft and sources", () => {
   const caseData = newCase("Report");
   caseData.memo.agent = "Agent finding";
@@ -179,4 +192,52 @@ test("case actions attach evidence and save only the analyst memo", () => {
   assert.equal(caseData.evidence[0].reading_id, "rdg_1");
   assert.equal(caseData.memo.human, "Analyst conclusion");
   assert.equal(caseData.memo.agent, "");
+});
+
+test("a later mutation invalidates entity-removal undo", () => {
+  const caseData = newCase("Undo revision");
+  caseData.entities.push({ id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
+  const actions = createCaseActions({ getCase: () => caseData, persist() {}, setUi() {}, runEntityPivot: async () => ({}) });
+
+  actions.removeEntity("ent_1");
+  actions.addEntity({ type: "domain", value: "openai.com", notes: "" });
+
+  assert.throws(() => actions.undoRemoval(), /nothing to undo/i);
+});
+
+test("entity notes editing records analyst context", () => {
+  const caseData = newCase("Notes");
+  caseData.entities.push({ id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
+  const actions = createCaseActions({ getCase: () => caseData, persist() {}, setUi() {}, runEntityPivot: async () => ({}) });
+
+  actions.editEntityNotes("ent_1", "Primary domain under review");
+
+  assert.equal(caseData.entities[0].notes, "Primary domain under review");
+  assert.equal(caseData.log[0].action, "edit_entity_notes");
+});
+
+test("form state capture and restore preserves unsaved values and focus selection", () => {
+  const controls = [
+    { id: "source-url", name: "url", type: "url", value: "https://example.com", checked: false, selectionStart: 8, selectionEnd: 15 },
+    { id: "archive", name: "archive", type: "checkbox", value: "on", checked: true, selectionStart: null, selectionEnd: null },
+  ];
+  const root = {
+    querySelectorAll: () => controls,
+    ownerDocument: { activeElement: controls[0] },
+    querySelector: (selector) => controls.find((control) => selector.includes(control.id)) ?? null,
+  };
+  controls[0].focus = () => { root.ownerDocument.activeElement = controls[0]; };
+  controls[0].setSelectionRange = (start, end) => { controls[0].selectionStart = start; controls[0].selectionEnd = end; };
+  const state = captureFormState(root);
+  controls[0].value = "";
+  controls[0].selectionStart = 0;
+  controls[0].selectionEnd = 0;
+  controls[1].checked = false;
+
+  restoreFormState(root, state);
+
+  assert.equal(controls[0].value, "https://example.com");
+  assert.equal(controls[1].checked, true);
+  assert.equal(root.ownerDocument.activeElement, controls[0]);
+  assert.deepEqual([controls[0].selectionStart, controls[0].selectionEnd], [8, 15]);
 });

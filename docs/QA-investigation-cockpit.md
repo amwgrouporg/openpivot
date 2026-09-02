@@ -1,6 +1,6 @@
 # Investigation Cockpit QA
 
-Date: 2026-09-03  
+Date: 2026-09-03
 Branch: `feat/investigation-cockpit`
 
 ## Automated verification
@@ -11,7 +11,7 @@ Command:
 node --test tests/*.test.js
 ```
 
-Result: 90 tests passed, 0 failed, 0 skipped.
+Result: 100 tests passed, 0 failed, 0 skipped.
 
 Coverage added for:
 
@@ -27,6 +27,13 @@ Coverage added for:
 - graph filtering, saved positions, and connected-node filtering;
 - the 18-second archive submission budget;
 - rejection of invalid candidate selectors surfaced by certificate data.
+- recovery of a valid migrated case when v2 persistence fails;
+- nested import validation and stale-reference rejection;
+- delayed real-registry WebMCP registration;
+- nonblank evidence quotes and persisted archive submission state;
+- literal Markdown export of untrusted fields;
+- dependent-run and reference cleanup during undoable removal;
+- form-state capture and focus restoration during rerenders.
 
 ## Local WebMCP flow
 
@@ -69,6 +76,10 @@ All three target widths rendered without horizontal body overflow. The applicati
 - Reduced-motion styles remove nonessential transition duration.
 - Untrusted source material is escaped text inside a labeled, visually isolated panel.
 - Unsafe URL schemes render as inert text rather than anchors.
+- Unsaved Evidence form values and active text focus survive a concurrent agent mutation.
+- Dialogs move focus inside, make the background inert, close on Escape, and restore focus to their trigger.
+- Candidate dismissal exposes Restore; Add consumes the candidate from the originating queue.
+- Entity notes are editable and recorded as an analyst action.
 
 ## Defects found and corrected during QA
 
@@ -79,4 +90,3 @@ All three target widths rendered without horizontal body overflow. The applicati
 5. Running two local Worker instances against one Durable Object SQLite state produced `SQLITE_BUSY_RECOVERY`. QA was repeated with a single local instance; this was a test-environment contention issue, not an application defect.
 
 Final browser console: no warnings or errors.
-
