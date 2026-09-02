@@ -43,5 +43,6 @@ export async function urlscanSensor(domain, apiKey, fetcher = fetchWithTimeout) 
   } catch (e) {
     return indeterminate("urlscan", sourceUrl, `parse: ${e.message}`);
   }
+  if (!Array.isArray(body?.results)) return indeterminate("urlscan", sourceUrl, "200 but no results array in body");
   return ok("urlscan", sourceUrl, normalizeUrlscan(body, domain));
 }

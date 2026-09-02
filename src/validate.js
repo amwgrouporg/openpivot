@@ -31,8 +31,14 @@ export function normalizeIp(input) {
   if (typeof input !== "string") return null;
   const s = input.trim();
   if (isIPv4(s)) return s;
+  const mapped = s.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
+  if (mapped && isIPv4(mapped[1])) return mapped[1];
   if (isIPv6(s)) return s.toLowerCase();
   return null;
+}
+
+export function isPrivateIp(ip) {
+  return isIPv4(ip) ? isPrivateIPv4(ip) : isPrivateIPv6(ip);
 }
 
 // Private, loopback, link-local and special-use ranges the Worker must never fetch.
@@ -65,6 +71,7 @@ export function parseHttpUrl(input) {
   }
   if (u.protocol !== "http:" && u.protocol !== "https:") return null;
   if (u.username || u.password) return null;
+  if (u.port) return null; // default ports only: the Worker is not a port scanner
   const host = u.hostname.toLowerCase();
   if (host === "localhost" || BLOCKED_HOST_SUFFIXES.some((s) => host.endsWith(s))) return null;
   if (isIPv4(host) && isPrivateIPv4(host)) return null;

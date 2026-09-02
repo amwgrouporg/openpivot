@@ -89,9 +89,17 @@ export async function rdapSensor(kind, q, fetcher = fetchWithTimeout) {
       errors.push(`${url}: parse ${e.message}`);
       continue;
     }
+    if (!looksLikeRdap(kind, body)) { errors.push(`${url}: 200 but not an RDAP ${kind} object`); continue; }
     return ok("rdap", finalUrl, kind === "domain" ? normalizeDomain(body) : normalizeIp(body));
   }
   return indeterminate("rdap", candidates.find((u) => u.startsWith("http")) ?? null, errors.join("; "));
+}
+
+// Pure. A 200 with an empty or unrelated JSON body is not a registration record.
+export function looksLikeRdap(kind, body) {
+  if (!body || typeof body !== "object") return false;
+  if (kind === "domain") return body.objectClassName === "domain" || typeof body.ldhName === "string" || typeof body.handle === "string";
+  return body.objectClassName === "ip network" || typeof body.startAddress === "string" || typeof body.handle === "string";
 }
 
 function vcardField(entity, key) {

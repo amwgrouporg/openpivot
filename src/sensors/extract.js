@@ -1,6 +1,42 @@
 // Readable text extraction for one URL. Deterministic: HTMLRewriter, no model.
 import { ok, indeterminate, fetchWithTimeout, readTextCapped } from "../envelope.js";
 import { UA } from "./wayback.js";
+import { parseHttpUrl, isIPv4, isIPv6, isPrivateIp } from "../validate.js";
+import { queryType } from "./dns.js";
+
+const MAX_HOPS = 5;
+
+// Resolves the hostname through DoH and refuses private or special-use answers. A
+// failed lookup refuses too: the target's address is then unknown, not proven public.
+export async function assertResolvesPublic(url, fetcher) {
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  if (isIPv4(host) || isIPv6(host)) { if (isPrivateIp(host)) throw new Error("target is a private address"); return; }
+  const answers = await Promise.all(["A", "AAAA"].map((t) => queryType(host, t, fetcher).catch((e) => { throw new Error(`could not resolve ${host}: ${e.message}`); })));
+  const ips = answers.flatMap((a) => a.records.map((r) => r.value)).filter((v) => isIPv4(v) || isIPv6(v));
+  if (ips.length === 0) throw new Error(`${host} has no public address records`);
+  const bad = ips.find((ip) => isPrivateIp(ip));
+  if (bad) throw new Error(`${host} resolves to a private address (${bad})`);
+}
+
+// Follows redirects by hand so every hop passes the same target checks as the first.
+export async function fetchPublic(url, init, fetcher) {
+  let current = url;
+  for (let hop = 0; hop <= MAX_HOPS; hop++) {
+    await assertResolvesPublic(current, fetcher);
+    const res = await fetcher(current.href, { ...init, redirect: "manual" }, 20000);
+    if ([301, 302, 303, 307, 308].includes(res.status)) {
+      const loc = res.headers.get("location");
+      if (!loc) return { res, finalUrl: current.href };
+      let next;
+      try { next = parseHttpUrl(new URL(loc, current.href).href); } catch { next = null; }
+      if (!next) throw new Error(`redirect to a disallowed target refused (${loc.slice(0, 120)})`);
+      current = next;
+      continue;
+    }
+    return { res, finalUrl: current.href };
+  }
+  throw new Error(`more than ${MAX_HOPS} redirects`);
+}
 
 const SKIP = "script,style,noscript,template,svg,iframe,canvas,object";
 const BLOCK = "p,div,br,li,ul,ol,h1,h2,h3,h4,h5,h6,tr,section,article,header,footer,blockquote,pre,table,nav,aside,dd,dt,figcaption";
@@ -30,7 +66,7 @@ export async function extractFromHtml(html, baseUrl) {
     })
     .on("a[href]", {
       element(e) {
-        if (links.length >= LINK_CAP) return;
+        if (skip > 0 || links.length >= LINK_CAP) return;
         const href = e.getAttribute("href");
         if (!href || href.startsWith("javascript:")) return;
         try {
@@ -56,6 +92,7 @@ export async function extractFromHtml(html, baseUrl) {
 export async function extractSensor(url, fetcher = fetchWithTimeout, selfOrigin = null) {
   const sourceUrl = url.href;
   let res;
+  let finalUrl;
   try {
     if (selfOrigin && url.origin === selfOrigin.origin) {
       // Own static assets: served from the binding, never over the network. The asset
@@ -68,12 +105,14 @@ export async function extractSensor(url, fetcher = fetchWithTimeout, selfOrigin 
         break;
       }
       res = new Response(res.body, { status: res.status, headers: res.headers });
-      Object.defineProperty(res, "url", { value: next });
-    } else res = await fetcher(sourceUrl, { headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5" }, redirect: "follow" }, 20000);
+      finalUrl = next;
+    } else {
+      ({ res, finalUrl } = await fetchPublic(url, { headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5" } }, fetcher));
+    }
   } catch (e) {
     return indeterminate("extract", sourceUrl, e.message);
   }
-  const finalUrl = res.url || sourceUrl;
+  finalUrl = finalUrl ?? res.url ?? sourceUrl;
   const contentType = res.headers.get("content-type") || "";
   const base = { requested_url: sourceUrl, final_url: finalUrl, http_status: res.status, content_type: contentType };
   if (!res.ok) return indeterminate("extract", sourceUrl, `http ${res.status}`, base);

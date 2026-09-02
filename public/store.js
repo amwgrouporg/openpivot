@@ -41,11 +41,36 @@ export function log(c, actor, action, detail) {
   if (c.log.length > 500) c.log.length = 500;
 }
 
+const HOSTNAME_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:xn--[a-z0-9-]{1,59}|[a-z]{2,63})$/;
+const IPV4_RE = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
 export function normalizeValue(type, value) {
   let v = String(value ?? "").trim();
-  if (type === "domain") v = v.toLowerCase().replace(/\.$/, "").replace(/^\*\./, "").replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-  if (type === "ip") v = v.toLowerCase();
+  if (type === "domain") {
+    v = v.toLowerCase().replace(/^\*\./, "");
+    if (/^[a-z][a-z0-9+.-]*:\/\//.test(v) || v.includes("/") || v.includes(":")) {
+      try { v = new URL(/^[a-z][a-z0-9+.-]*:\/\//.test(v) ? v : `http://${v}`).hostname; } catch { /* leave as typed; validated below */ }
+    }
+    v = v.replace(/\.$/, "");
+  }
+  if (type === "ip") v = v.toLowerCase().replace(/^\[|\]$/g, "");
+  if (type === "url") v = v.replace(/\s+/g, "");
   return v;
+}
+
+// Throws on selectors no sensor could ever accept, so the board never holds dead entities.
+export function validateValue(type, v) {
+  if (type === "domain" && !HOSTNAME_RE.test(v)) throw new Error(`not a hostname: ${v}`);
+  if (type === "ip" && !(IPV4_RE.test(v) || (v.includes(":") && /^[0-9a-f:.]+$/.test(v)))) throw new Error(`not an IP address: ${v}`);
+  if (type === "url") {
+    let u;
+    try { u = new URL(v); } catch { throw new Error(`not a URL: ${v}`); }
+    if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error(`only http(s) URLs: ${v}`);
+  }
+}
+
+export function isHttpUrl(s) {
+  try { const u = new URL(String(s)); return u.protocol === "http:" || u.protocol === "https:"; } catch { return false; }
 }
 
 export function addEntity(c, { type, value, notes }, actor) {
@@ -53,6 +78,7 @@ export function addEntity(c, { type, value, notes }, actor) {
   if (!ENTITY_TYPES.includes(type)) throw new Error(`entity type outside vocabulary: ${type}`);
   const v = normalizeValue(type, value);
   if (!v) throw new Error("value required");
+  validateValue(type, v);
   const existing = c.entities.find((e) => e.type === type && e.value === v);
   if (existing) {
     if (notes) existing.notes = [existing.notes, notes].filter(Boolean).join("\n");
@@ -96,8 +122,9 @@ export function setLinkStatus(c, id, status, actor) {
 export function addEvidence(c, { entity_ids, url, quote, archived_url }, actor) {
   assertActor(actor);
   const ids = (Array.isArray(entity_ids) ? entity_ids : []).filter((id) => findEntity(c, id));
-  const ev = { id: uid("evd"), entity_ids: ids, url: String(url ?? "").slice(0, 2048), quote: String(quote ?? "").slice(0, 4000), captured_at: new Date().toISOString(), archived_url: archived_url ?? null, added_by: actor, untrusted: true };
-  if (!ev.url) throw new Error("url required");
+  const ev = { id: uid("evd"), entity_ids: ids, url: String(url ?? "").trim().slice(0, 2048), quote: String(quote ?? "").slice(0, 4000), captured_at: new Date().toISOString(), archived_url: archived_url ?? null, added_by: actor, untrusted: true };
+  if (!isHttpUrl(ev.url)) throw new Error("url must be http(s)");
+  if (ev.archived_url && !isHttpUrl(ev.archived_url)) ev.archived_url = null;
   c.evidence.push(ev);
   log(c, actor, "attach_evidence", ev.url);
   return ev;
@@ -138,7 +165,9 @@ export function summarize(env) {
         if (d.kind === "domain") return prefix + (d.registered === false ? "not registered at the registry" : `registrar ${d.registrar?.name ?? "n/a"}; ${d.events.map((e) => `${e.action} ${String(e.date).slice(0, 10)}`).join(", ")}; NS ${d.nameservers.join(", ") || "n/a"}`);
         return prefix + `${d.name ?? d.handle ?? "n/a"} ${d.cidrs.join(", ")} ${d.country ?? ""}`.trim();
       case "certs": return prefix + `${d.certificate_count} certs, ${d.distinct_names.length} names, first ${String(d.first_seen).slice(0, 10)}, last ${String(d.last_seen).slice(0, 10)}`;
-      case "wayback": return prefix + (d.captures_in_index ? `${d.captures_in_index} months with captures, ${d.first_seen.slice(0, 8)} to ${d.last_seen.slice(0, 8)}` : "no captures in the CDX index");
+      case "wayback":
+        if (d.precision === "closest-snapshot") return prefix + (d.sample?.length ? `snapshots ${String(d.first_seen).slice(0, 8)} to ${String(d.last_seen).slice(0, 8)} via availability API, capture count unknown` : "no snapshot known to the availability API");
+        return prefix + (d.captures_in_index ? `${d.captures_in_index} months with captures, ${d.first_seen.slice(0, 8)} to ${d.last_seen.slice(0, 8)}` : "no captures in the CDX index");
       case "archive": return prefix + (d.archived_url ? `archived: ${d.archived_url}` : `submitted; check ${d.check_url}`);
       case "urlscan": return prefix + `${d.total} public scans` + (d.scans[0] ? `; latest ${String(d.scans[0].time).slice(0, 10)} ip ${d.scans[0].ip} ${d.scans[0].asn_name ?? ""}` : "");
       case "ip": return prefix + `${d.asn ?? ""} ${d.org ?? ""} ${d.city ?? ""} ${d.country ?? ""}`.replace(/\s+/g, " ").trim();

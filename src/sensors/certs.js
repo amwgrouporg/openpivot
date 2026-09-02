@@ -8,7 +8,8 @@ export function certspotterUrl(domain) {
 
 // Pure. Cert Spotter issuances -> crt.sh-shaped rows so one normaliser serves both.
 export function certspotterToRows(list) {
-  return (Array.isArray(list) ? list : []).map((c) => ({
+  if (!Array.isArray(list)) throw new Error("certspotter returned a non-array body");
+  return list.map((c) => ({
     id: c.id,
     issuer_name: c.issuer?.name ?? c.issuer?.friendly_name ?? null,
     common_name: Array.isArray(c.dns_names) ? c.dns_names[0] : null,
@@ -27,8 +28,10 @@ async function fetchList(pattern, fetcher) {
   const res = await fetcher(crtshUrl(pattern), { headers: { accept: "application/json" } }, 25000);
   if (!res.ok) throw new Error(`crt.sh http ${res.status}`);
   const text = await res.text();
-  if (!text.trim()) return [];
-  return JSON.parse(text);
+  if (!text.trim()) throw new Error("crt.sh returned an empty body");
+  const parsed = JSON.parse(text);
+  if (!Array.isArray(parsed)) throw new Error("crt.sh returned a non-array body");
+  return parsed;
 }
 
 // Pure. Turns crt.sh rows into a compact summary.
@@ -38,9 +41,8 @@ export function normalizeCerts(rows, domain) {
   let first = null;
   let last = null;
   const byId = new Map();
-  for (const r of rows) {
-    if (!r || typeof r !== "object") continue;
-    byId.set(r.id, r);
+  for (const r of rows) if (r && typeof r === "object") byId.set(r.id ?? r.cert_sha256 ?? JSON.stringify(r), r);
+  for (const r of byId.values()) {
     for (const n of String(r.name_value ?? "").split(/\n+/)) {
       const v = n.trim().toLowerCase().replace(/^\*\./, "");
       if (v) names.add(v);

@@ -50,6 +50,10 @@ export function availableUrl(target, timestamp) {
 }
 
 // Pure. Two availability answers (closest to 1996, closest to now) -> timeline shape.
+export function isAvailabilityShape(body) {
+  return Boolean(body) && typeof body === "object" && body.archived_snapshots !== undefined && typeof body.archived_snapshots === "object";
+}
+
 export function normalizeAvailability(earliest, latest, target) {
   const pick = (b) => b?.archived_snapshots?.closest;
   const e = pick(earliest);
@@ -75,7 +79,11 @@ export async function waybackSensor(target, fetcher = fetchWithTimeout) {
     if (!res.ok) errors.push(`cdx http ${res.status}`);
     else {
       const text = await res.text();
-      return ok("wayback", sourceUrl, normalizeCdx(text.trim() ? JSON.parse(text) : [], target));
+      const rows = text.trim() ? JSON.parse(text) : [];
+      // CDX answers "no captures" with an empty body, which is indistinguishable from a
+      // broken upstream. Only a header row is proof of a working index.
+      if (Array.isArray(rows) && rows.length > 0 && Array.isArray(rows[0])) return ok("wayback", sourceUrl, normalizeCdx(rows, target));
+      errors.push("cdx returned no rows; confirming through the availability API");
     }
   } catch (e) {
     errors.push(`cdx: ${e.message}`);
@@ -85,7 +93,11 @@ export async function waybackSensor(target, fetcher = fetchWithTimeout) {
   try {
     const [er, lr] = await Promise.all([fetcher(eUrl, {}, 15000), fetcher(availableUrl(target), {}, 15000)]);
     if (!er.ok || !lr.ok) errors.push(`availability http ${er.status}/${lr.status}`);
-    else return ok("wayback", eUrl, normalizeAvailability(await er.json(), await lr.json(), target));
+    else {
+      const [eb, lb] = await Promise.all([er.json(), lr.json()]);
+      if (isAvailabilityShape(eb) && isAvailabilityShape(lb)) return ok("wayback", eUrl, normalizeAvailability(eb, lb, target));
+      errors.push("availability returned a body without archived_snapshots");
+    }
   } catch (e) {
     errors.push(`availability: ${e.message}`);
   }

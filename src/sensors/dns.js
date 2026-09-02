@@ -18,6 +18,7 @@ export async function queryType(name, type, fetcher = fetchWithTimeout) {
 
 // Pure. Turns a DoH JSON body into { rcode, records[] }.
 export function normalizeAnswer(type, body) {
+  if (!body || typeof body !== "object" || !Number.isInteger(body.Status)) throw new Error(`doh ${type}: response is not a DNS JSON answer`);
   const rcode = RCODES[body.Status] ?? `RCODE${body.Status}`;
   const answers = Array.isArray(body.Answer) ? body.Answer : [];
   const records = answers

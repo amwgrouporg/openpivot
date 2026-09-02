@@ -39,5 +39,6 @@ export async function ipSensor(ip, token, fetcher = fetchWithTimeout) {
   } catch (e) {
     return indeterminate("ip", sourceUrl, `parse: ${e.message}`);
   }
+  if (typeof body?.ip !== "string") return indeterminate("ip", sourceUrl, "200 but no ip field in body");
   return ok("ip", sourceUrl, normalizeIpinfo(body, ip));
 }

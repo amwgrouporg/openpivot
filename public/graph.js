@@ -2,6 +2,10 @@
 const COLORS = { domain: "#3b82f6", ip: "#f59e0b", url: "#10b981", org: "#a855f7", document: "#64748b", claim: "#ef4444" };
 
 export function createGraph(svgEl, { onSelect }) {
+  if (typeof d3 === "undefined") {
+    // The board must keep working, and tools must register, without the graph library.
+    return { update() {}, select() {}, colors: COLORS, unavailable: true };
+  }
   const svg = d3.select(svgEl);
   const g = svg.append("g");
   const linkLayer = g.append("g").attr("class", "links");
@@ -31,11 +35,13 @@ export function createGraph(svgEl, { onSelect }) {
 
     const link = linkLayer.selectAll("line").data(links, (d) => d.id);
     link.exit().remove();
-    link.enter().append("line").merge(link)
+    const linkEnter = link.enter().append("line");
+    linkEnter.append("title");
+    linkEnter.merge(link)
       .attr("stroke", (d) => (d.status === "accepted" ? "#94a3b8" : "#cbd5e1"))
       .attr("stroke-width", (d) => (d.status === "accepted" ? 2 : 1.5))
       .attr("stroke-dasharray", (d) => (d.status === "proposed" ? "5,4" : null))
-      .append("title").text((d) => `${d.status}: ${d.rationale}`);
+      .select("title").text((d) => `${d.status}: ${d.rationale}`);
 
     const node = nodeLayer.selectAll("g.node").data(nodes, (d) => d.id);
     node.exit().remove();

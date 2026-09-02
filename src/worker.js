@@ -3,7 +3,7 @@
 //
 // AI-BRAIN: the model on the other side of WebMCP decides which pivot to run and what
 // a result means. This Worker is deterministic sensors only. It never interprets.
-// REDTEAM: pending
+// REDTEAM: gpt-5.6-sol 2026-09-02 (docs/REDTEAM_gpt56sol_20260902.md; findings 1-4, 6-25 fixed or bounded)
 import { ok, indeterminate, jsonResponse } from "./envelope.js";
 import { normalizeHostname, normalizeIp, parseHttpUrl, clampInt, shortText } from "./validate.js";
 import { dnsSensor, ptrSensor } from "./sensors/dns.js";
@@ -14,7 +14,7 @@ import { urlscanSensor } from "./sensors/urlscan.js";
 import { ipSensor } from "./sensors/ip.js";
 import { searchSensor } from "./sensors/search.js";
 import { wikidataSensor } from "./sensors/wikidata.js";
-import { extractSensor } from "./sensors/extract.js";
+import { extractSensor, assertResolvesPublic } from "./sensors/extract.js";
 import { buildQueries } from "./queries.js";
 export { Limiter } from "./limiter_do.js";
 
@@ -58,6 +58,11 @@ export async function handleApi(request, env) {
   const route = url.pathname.replace(/^\/api\//, "").replace(/\/$/, "");
   const p = (k) => url.searchParams.get(k);
 
+  const rl = await rateLimited(request, env);
+  if (rl.limited) {
+    return jsonResponse(indeterminate(route, null, `rate limited: ${RATE_LIMIT} sensor calls per minute per client; retry after ${rl.retry_after}s`), { status: 429, headers: { "retry-after": String(rl.retry_after) } });
+  }
+
   if (route === "health") {
     return jsonResponse({
       ok: true,
@@ -65,11 +70,6 @@ export async function handleApi(request, env) {
       secrets_present: { brave: Boolean(env.BRAVE_API_KEY), ipinfo: Boolean(env.IPINFO_TOKEN), urlscan: Boolean(env.URLSCAN_API_KEY) },
       rate_limit: { per_client_per_minute: RATE_LIMIT, durable_object: Boolean(env.LIMITER?.idFromName), binding: Boolean(env.RATE_LIMITER?.limit) },
     });
-  }
-
-  const rl = await rateLimited(request, env);
-  if (rl.limited) {
-    return jsonResponse(indeterminate(route, null, `rate limited: ${RATE_LIMIT} sensor calls per minute per client; retry after ${rl.retry_after}s`), { status: 429, headers: { "retry-after": String(rl.retry_after) } });
   }
 
   switch (route) {
@@ -108,6 +108,7 @@ export async function handleApi(request, env) {
       try { body = await request.json(); } catch { return bad("archive", "JSON body required"); }
       const target = parseHttpUrl(body?.url);
       if (!target) return bad("archive", "url must be a public http(s) URL");
+      try { await assertResolvesPublic(target); } catch (e) { return bad("archive", e.message); }
       return jsonResponse(await archiveNowSensor(target.href));
     }
     case "urlscan": {

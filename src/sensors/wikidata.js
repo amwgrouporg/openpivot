@@ -36,5 +36,6 @@ export async function wikidataSensor(q, fetcher = fetchWithTimeout) {
   } catch (e) {
     return indeterminate("wikidata", sourceUrl, `parse: ${e.message}`);
   }
+  if (!Array.isArray(body?.search)) return indeterminate("wikidata", sourceUrl, "200 but no search array in body");
   return ok("wikidata", sourceUrl, normalizeWikidata(body, q));
 }

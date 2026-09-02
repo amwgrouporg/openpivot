@@ -4,8 +4,8 @@
 //
 // AI-BRAIN: the WebMCP client (the agent) carries the investigative judgement. This file
 // registers tools, keeps provenance and renders. It never infers a link or a finding.
-// REDTEAM: pending
-import { loadCase, saveCase, newCase, addEntity, addLink, setLinkStatus, addEvidence, addReading, setMemo, log, findEntity, exportMarkdown, ENTITY_TYPES, candidatesFrom, normalizeValue } from "./store.js";
+// REDTEAM: gpt-5.6-sol 2026-09-02 (docs/REDTEAM_gpt56sol_20260902.md)
+import { loadCase, saveCase, newCase, addEntity, addLink, setLinkStatus, addEvidence, addReading, setMemo, log, findEntity, exportMarkdown, ENTITY_TYPES, candidatesFrom, normalizeValue, isHttpUrl } from "./store.js";
 import { sensor } from "./api.js";
 import { getModelContext, createRegistry } from "./webmcp.js";
 import { createGraph } from "./graph.js";
@@ -36,9 +36,10 @@ function resolveEntity(args, expectedType) {
   let e = args?.entity_id ? findEntity(c, String(args.entity_id)) : null;
   if (!e && args?.value) {
     const wanted = String(args.value);
-    e = c.entities.find((x) => x.value === normalizeValue(x.type, wanted)) ?? null;
+    const pool = expectedType ? c.entities.filter((x) => x.type === expectedType) : c.entities;
+    e = pool.find((x) => x.value === normalizeValue(x.type, wanted)) ?? null;
   }
-  if (!e) throw new Error("entity not found; call read_case for ids, or add_entity first");
+  if (!e) throw new Error("entity not found; pass entity_id from read_case, or the exact value of an existing entity of the right type, or add_entity first");
   if (expectedType && e.type !== expectedType) throw new Error(`entity ${e.value} is a ${e.type}, this pivot needs a ${expectedType}`);
   return e;
 }
@@ -177,21 +178,21 @@ const DYNAMIC_TOOLS = {
   domain: {
     name: "pivot_domain",
     description: "Run every domain sensor on one domain entity in parallel: DNS records, RDAP registration, certificate transparency history, Wayback timeline and urlscan scans. Returns readings plus candidate selectors (IPs, nameservers, certificate names) that are not yet on the board.",
-    inputSchema: obj({ entity_id: str("Domain entity id"), value: str("Alternative to entity_id: the domain itself") }),
+    inputSchema: obj({ entity_id: str("Domain entity id from read_case. Provide entity_id or value, one is required."), value: str("The domain itself, when entity_id is not given") }),
     annotations: { untrustedContentHint: true },
     execute: (args) => pivotDomain(resolveEntity(args, "domain"), "agent"),
   },
   ip: {
     name: "pivot_ip",
     description: "Run every IP sensor on one ip entity: RDAP network block, ipinfo ownership and geography, reverse DNS.",
-    inputSchema: obj({ entity_id: str("IP entity id"), value: str("Alternative to entity_id: the IP itself") }),
+    inputSchema: obj({ entity_id: str("IP entity id from read_case. Provide entity_id or value, one is required."), value: str("The IP itself, when entity_id is not given") }),
     annotations: { untrustedContentHint: true },
     execute: (args) => pivotIp(resolveEntity(args, "ip"), "agent"),
   },
   url: {
     name: "pivot_url",
     description: "Run the URL sensors on one url entity: Wayback timeline and readable-text extraction. Set archive=true to also request a fresh Wayback snapshot.",
-    inputSchema: obj({ entity_id: str("URL entity id"), value: str("Alternative to entity_id: the URL itself"), archive: { type: "boolean", description: "Request a fresh Wayback snapshot" } }),
+    inputSchema: obj({ entity_id: str("URL entity id from read_case. Provide entity_id or value, one is required."), value: str("The URL itself, when entity_id is not given"), archive: { type: "boolean", description: "Request a fresh Wayback snapshot" } }),
     annotations: { untrustedContentHint: true },
     execute: (args) => pivotUrl(resolveEntity(args, "url"), "agent", Boolean(args?.archive)),
   },
@@ -215,7 +216,9 @@ async function registerStaticTools() {
 const typeBadge = (t) => `<span class="badge type" style="--c:${graph.colors[t] ?? "#999"}">${esc(t)}</span>`;
 const actorBadge = (a) => `<span class="badge ${esc(a)}">${esc(a)}</span>`;
 const statusBadge = (s) => `<span class="badge ${esc(s)}">${esc(s)}</span>`;
-const link = (url, text) => (url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(text ?? short(url, 70))}</a>` : "");
+// Anchors only for http(s). Anything else renders as inert text, so stored evidence can
+// never become a javascript: or data: link.
+const link = (url, text) => (url ? (isHttpUrl(url) ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(text ?? short(url, 70))}</a>` : `<span class="meta">${esc(text ?? short(url, 70))}</span>`) : "");
 
 function renderReading(r) {
   return `<li>
@@ -310,7 +313,7 @@ function render() {
   const body = $("#panel-body");
   body.classList.toggle("busy", ui.busy > 0);
   body.innerHTML = { entities: renderEntities, links: renderLinks, evidence: renderEvidence, readings: renderReadings, memo: renderMemo, log: renderLog }[ui.tab]();
-  $("#legend").innerHTML = Object.entries(graph.colors).map(([t, col]) => `<span style="--c:${col}">${t}</span>`).join("") + '<span style="--c:transparent;border:1px dashed #94a3b8;border-radius:50%">dashed ring: added by agent</span>';
+  $("#legend").innerHTML = Object.entries(graph.colors).map(([t, col]) => `<span style="--c:${col}">${t}</span>`).join("") + '<span style="--c:transparent;border:1px dashed #94a3b8;border-radius:50%">dashed ring: added by agent</span>' + (graph.unavailable ? '<span style="--c:#ef4444">graph library did not load; board and tools still work</span>' : "");
   const pill = $("#mcp-status");
   if (!mc) { pill.textContent = "WebMCP unavailable"; pill.className = "pill off"; }
   else { pill.textContent = `WebMCP: ${registry.names().length} tools`; pill.className = "pill on"; }

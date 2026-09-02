@@ -38,5 +38,6 @@ export async function searchSensor(q, apiKey, count, fetcher = fetchWithTimeout)
   } catch (e) {
     return indeterminate("search", sourceUrl, `parse: ${e.message}`);
   }
+  if (!body || typeof body !== "object" || (body.type !== "search" && !body.query && !body.web)) return indeterminate("search", sourceUrl, "200 but not a Brave search response");
   return ok("search", sourceUrl, normalizeBrave(body, q));
 }
