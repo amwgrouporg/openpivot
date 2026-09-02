@@ -68,7 +68,8 @@ input[type=text], select, textarea { background: var(--bg); border: 1px solid va
 input[type=text].mono { font-family: var(--mono); font-size: 11.5px; }
 input[type=text]:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
 input[type=text] { min-width: 8rem; }
-select { padding-right: 20px; }
+select { padding-right: 20px; max-width: 15rem; min-width: 7rem; text-overflow: ellipsis; }
+.cmd input.grow { flex: 1; min-width: 6rem; }
 textarea { width: 100%; min-height: 9rem; resize: vertical; font-family: var(--sans); line-height: 1.45; }
 label.chk { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
 
