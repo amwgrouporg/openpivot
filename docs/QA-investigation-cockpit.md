@@ -11,7 +11,7 @@ Command:
 node --test tests/*.test.js
 ```
 
-Result: 107 tests passed, 0 failed, 0 skipped.
+Result: 119 tests passed, 0 failed, 0 skipped.
 
 Coverage added for:
 
@@ -26,20 +26,26 @@ Coverage added for:
 - Overview, entity, relationship, evidence, and report view behavior;
 - graph filtering, saved positions, and connected-node filtering;
 - the 18-second archive submission budget;
-- rejection of invalid candidate selectors surfaced by certificate data.
+- rejection of invalid candidate selectors surfaced by certificate data;
 - recovery of a valid migrated case when v2 persistence fails;
 - nested import validation and stale-reference rejection;
 - delayed real-registry WebMCP registration;
 - nonblank evidence quotes and persisted archive submission state;
 - literal Markdown export of untrusted fields;
 - dependent-run and reference cleanup during undoable removal;
-- form-state capture and focus restoration during rerenders.
+- form-state capture and focus restoration during rerenders;
 - tolerant, non-overwriting repair of inconsistent stored v2 references;
 - citation cleanup/restoration during entity removal;
 - hidden graph-position preservation while filters are active;
 - persistent restoration of dismissed candidates;
 - cross-case undo invalidation and transient-state reset;
-- fenced literal export of untrusted evidence blocks.
+- fenced literal export of untrusted evidence blocks;
+- migration, validation, and recovery of the case objective, scope, and status;
+- typed technical relationships and evidence relevance notes without breaking older cases;
+- analyst-level status labels that do not present collection as verification;
+- grouped investigative leads, persistent selection, batch add, and batch dismissal;
+- local case search across entities, collection results, evidence, relationships, and findings;
+- independent investigator notes, collection gaps, methodology, and agent-draft authority boundaries.
 
 ## Local WebMCP flow
 
@@ -60,6 +66,23 @@ Local Worker: `http://localhost:8788/` in the ChatGPT built-in browser.
 | Export | Markdown export included relationship citations and both memo sections |
 | Final case | 3 entities, 1 accepted relationship, 1 evidence item, 10 readings, 13 available tools |
 
+## Cyber-investigation workflow verification
+
+| Check | Result |
+|---|---|
+| Investigation definition | Objective, scope, and case status saved and survived reload |
+| Scope boundary | Public DNS, registration, certificate, URL-scan, and archive sources; no person-level enrichment |
+| Lead triage | Leads grouped by source entity and collection method |
+| Batch add | Two selected leads became entities without creating relationships |
+| Relationship semantics | Explicit technical relationship types are shown separately from the analyst verdict |
+| Evidence semantics | Verbatim source excerpt and analyst relevance note remain separate fields |
+| Case search | `registration` returned matching entity, collection result, evidence, and agent-draft records |
+| Search routing | Selecting an evidence result opened Source excerpts and focused the matching record |
+| Findings | Investigator notes, outstanding questions, methodology, and agent draft persisted independently |
+| Authority boundary | Agent draft remains visibly marked as requiring validation; collection is never labelled verified |
+| Prompt injection | No `verified-partner.example` entity or relationship was introduced |
+| Fresh dynamic registration | Empty case exposed 10 tools; adding `example.com` exposed 11 including `pivot_domain` |
+
 Archive submission was not repeated during this local run because it creates a public third-party side effect. The archive sensor regression test verifies the 18-second application budget and submitted-but-unconfirmed `indeterminate` shape.
 
 ## Responsive verification
@@ -68,9 +91,9 @@ All three target widths rendered without horizontal body overflow. The applicati
 
 | Viewport | Result | Screenshot |
 |---|---|---|
-| 480 × 640 | Single-column Overview, visible five-item bottom navigation, 40 px actions, no horizontal overflow | `docs/screenshots/cockpit-480.png` |
+| 480 × 640 | Single-column Case overview, visible five-item bottom navigation, 40 px actions, no horizontal overflow | `docs/screenshots/cockpit-480.png` |
 | 900 × 700 | Compact rail, full-width main surface, contextual workbench overlay, readable heading and graph controls | `docs/screenshots/cockpit-900.png` |
-| 1440 × 900 | Full rail, spacious Overview metrics and review queue, no horizontal overflow | `docs/screenshots/cockpit-1440.png` |
+| 1440 × 900 | Full rail, investigation definition, review priorities, and grouped lead triage, no horizontal overflow | `docs/screenshots/cockpit-1440.png` |
 
 ## Accessibility and interaction checks
 

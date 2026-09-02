@@ -1,21 +1,23 @@
 # OpenPivot
 
-An agent-driven investigation board over the open web's public record, exposed through
+An analyst-led cyber investigation board for public technical records, exposed through
 [WebMCP](https://github.com/webmachinelearning/webmcp).
 
 Live: https://openpivot.edge-4q7m9x2k.workers.dev
 
-An investigation is a pivot chain. Every finding yields new selectors, and each selector
-needs several lookups across several public registries. Analysts run that chain by hand
+An infrastructure investigation is a pivot chain. Every collection result can surface new selectors,
+and each selector needs several lookups across public technical sources. Analysts run that chain by hand
 across many tabs. Agents left to browse those registries guess at UIs and misread results.
 Neither party keeps provenance.
 
 OpenPivot puts the pivots behind WebMCP tools on a shared board. The agent decides which
-pivot to run next and what a result means. The human directs, accepts or rejects the links
-the agent proposes, and edits the memo. Every entity, link, evidence item and sensor reading
+pivot to run next and what a result means. The investigator defines the scope, accepts or rejects the relationships
+the agent proposes, and records findings. Every entity, relationship, evidence item and collection result
 carries who asserted it, when, and the source URL.
 
-Built for journalists, fact-checkers, security researchers and trust-and-safety teams.
+Built for cyber investigators, incident responders, threat researchers, journalists, fact-checkers,
+and trust-and-safety teams. It investigates technical infrastructure and public artifacts; it is not
+an intelligence-assessment or person-profiling system.
 
 ## How it works
 
@@ -52,15 +54,15 @@ Always registered:
 
 | Tool | Does |
 |---|---|
-| `read_case` | Whole board: entities with ids, links with status, evidence, readings, memo, log |
+| `read_case` | Whole case: investigation definition, entities, relationships, evidence, collection results, findings, and audit trail |
 | `add_entity` | Add a domain, ip, url, org, document or claim. Dedupes. |
-| `link_entities` | Propose a relationship with a rationale. Stays `proposed` until the human rules on it. |
-| `attach_evidence` | Source URL plus verbatim quote, optionally archived to the Wayback Machine |
+| `link_entities` | Queue a typed technical relationship with a rationale. It remains pending analyst review until an investigator rules on it. |
+| `attach_evidence` | Source URL, verbatim excerpt, and optional relevance note, with optional Wayback submission |
 | `search_web` | Brave web search |
 | `lookup_wikidata` | Wikidata entity search |
 | `extract_page` | Title, readable text and outbound links of one public URL |
 | `build_queries` | Operator variants, name permutations, Cyrillic and Latin transliterations |
-| `write_memo` | The agent's section of the findings memo. The human's section is not tool-writable. |
+| `write_memo` | The agent draft in Findings. Investigator notes, collection gaps, and methodology are not tool-writable. |
 | `export_case` | The case as markdown |
 
 Registered only while an entity of that type is on the board, so the browser fires
@@ -72,8 +74,8 @@ Registered only while an entity of that type is on the board, so the browser fir
 | `pivot_ip` | RDAP network block, ipinfo, reverse DNS |
 | `pivot_url` | Wayback timeline, text extraction, optional archive-now |
 
-Pivot tools return readings plus candidate selectors (IPs, nameservers, certificate names,
-outbound-link hosts) that are not on the board until a person or the agent adds them.
+Pivot tools return collection results plus investigative leads (IPs, nameservers, certificate names,
+outbound-link hosts) that are not case entities until an investigator or the agent adds them.
 
 Every tool that returns third-party content carries `annotations.untrustedContentHint` and
 wraps the payload as data. The board renders such content inside a visibly marked panel.
@@ -103,15 +105,19 @@ No natural-person pivots: no username sweeps, no email-to-profile, no people sea
 data, no biometrics. Entities are domains, IPs, URLs, organizations, documents and claims.
 No accounts, no server-side storage: the case lives in your browser until you export it.
 
-## Investigation cockpit
+## Cyber investigation workspace
 
 The interface is organized around decisions rather than raw tables:
 
-- **Overview** prioritizes proposed relationships, indeterminate readings and new candidates.
-- **Entities** combines a filterable graph, entity browser, sensor progress, readings and candidate actions.
-- **Relationships** keeps rationale, citations and the human verdict together.
-- **Evidence** records exact untrusted quotes, sources, linked entities and archive state.
-- **Report** separates analyst conclusions from the agent draft and exports Markdown or lossless JSON.
+- **Case overview** defines the objective, scope, and case status, then prioritizes relationships pending review, inconclusive collection, and untriaged leads.
+- **Entities** combines an investigation graph, entity browser, collection progress, source-linked results, and lead actions.
+- **Relationships** keeps the technical relationship type, rationale, citations, and investigator verdict together.
+- **Evidence** records verbatim untrusted source excerpts, relevance notes, linked entities, and archive state.
+- **Findings** separates investigator notes, outstanding questions, methodology, and the agent draft, then exports Markdown or lossless JSON.
+
+Adding a lead never silently establishes a relationship. Agent-proposed relationships remain pending
+until an investigator accepts or rejects them, and an accepted relationship is a case decision—not
+proof of attribution. Failed or unavailable collection is shown as inconclusive, never as a negative finding.
 
 Cases remain local to the browser. Existing v1 cases migrate to a validated v2 record while the original value remains available as a recovery backup.
 
