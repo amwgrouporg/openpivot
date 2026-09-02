@@ -151,14 +151,22 @@ export function restoreRemoval(c, snapshot) {
   log(c, snapshot.actor, "restore_entity", snapshot.entity.id);
 }
 
-export function addLink(c, { from, to, rationale }, actor, status = "proposed") {
+export function addLink(c, { from, to, rationale, citations = [] }, actor, status = "proposed") {
   assertActor(actor);
   if (!LINK_STATUS.includes(status)) throw new Error(`link status outside vocabulary: ${status}`);
   if (!findEntity(c, from) || !findEntity(c, to)) throw new Error("both entities must exist");
   if (from === to) throw new Error("cannot link an entity to itself");
   const dup = c.links.find((l) => (l.from === from && l.to === to) || (l.from === to && l.to === from));
   if (dup) return { link: dup, created: false };
-  const link = { id: uid("lnk"), from, to, rationale: String(rationale ?? "").slice(0, 1000), asserted_by: actor, status, at: new Date().toISOString() };
+  const checkedCitations = citations.map((citation) => {
+    if (!citation || !["reading", "evidence"].includes(citation.kind)) throw new Error("citation kind must be reading or evidence");
+    const exists = citation.kind === "reading"
+      ? c.readings.some((reading) => reading.id === citation.id)
+      : c.evidence.some((evidence) => evidence.id === citation.id);
+    if (!exists) throw new Error(`citation not found: ${citation.id}`);
+    return { kind: citation.kind, id: citation.id };
+  });
+  const link = { id: uid("lnk"), from, to, rationale: String(rationale ?? "").slice(0, 1000), citations: checkedCitations, asserted_by: actor, status, at: new Date().toISOString() };
   c.links.push(link);
   log(c, actor, "link_entities", `${findEntity(c, from).value} -> ${findEntity(c, to).value} (${status})`);
   return { link, created: true };
@@ -176,10 +184,11 @@ export function setLinkStatus(c, id, status, actor) {
   return link;
 }
 
-export function addEvidence(c, { entity_ids, url, quote, archived_url }, actor) {
+export function addEvidence(c, { entity_ids, url, quote, archived_url, reading_id = null }, actor) {
   assertActor(actor);
   const ids = (Array.isArray(entity_ids) ? entity_ids : []).filter((id) => findEntity(c, id));
-  const ev = { id: uid("evd"), entity_ids: ids, url: String(url ?? "").trim().slice(0, 2048), quote: String(quote ?? "").slice(0, 4000), captured_at: new Date().toISOString(), archived_url: archived_url ?? null, added_by: actor, untrusted: true };
+  if (reading_id && !c.readings.some((reading) => reading.id === reading_id)) throw new Error("reading not found");
+  const ev = { id: uid("evd"), entity_ids: ids, url: String(url ?? "").trim().slice(0, 2048), quote: String(quote ?? "").slice(0, 4000), captured_at: new Date().toISOString(), archived_url: archived_url ?? null, added_by: actor, untrusted: true, reading_id };
   if (!isHttpUrl(ev.url)) throw new Error("url must be http(s)");
   if (ev.archived_url && !isHttpUrl(ev.archived_url)) ev.archived_url = null;
   c.evidence.push(ev);
@@ -298,7 +307,13 @@ export function exportMarkdown(c) {
   lines.push("## Entities", "");
   for (const x of c.entities) lines.push(`- **${x.type}** ${x.value} (added by ${x.added_by}, ${x.added_at})${x.notes ? ` -- ${x.notes.replace(/\n/g, " ")}` : ""}`);
   lines.push("", "## Links", "");
-  for (const l of c.links.filter((l) => l.status !== "rejected")) lines.push(`- ${e(l.from)?.value ?? l.from} -> ${e(l.to)?.value ?? l.to} [${l.status}, asserted by ${l.asserted_by}]: ${l.rationale}`);
+  for (const l of c.links.filter((l) => l.status !== "rejected")) {
+    lines.push(`- ${e(l.from)?.value ?? l.from} -> ${e(l.to)?.value ?? l.to} [${l.status}, asserted by ${l.asserted_by}]: ${l.rationale}`);
+    const sources = (l.citations ?? []).map((citation) => citation.kind === "reading"
+      ? c.readings.find((reading) => reading.id === citation.id)?.source_url
+      : c.evidence.find((evidence) => evidence.id === citation.id)?.url).filter(Boolean);
+    if (sources.length) lines.push(`  - Citations: ${sources.join(", ")}`);
+  }
   const rejected = c.links.filter((l) => l.status === "rejected");
   if (rejected.length) {
     lines.push("", "### Rejected links", "");
