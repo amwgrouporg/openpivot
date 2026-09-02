@@ -19,6 +19,8 @@ export function createGraph(svgEl, { onSelect }) {
     .force("link", d3.forceLink().id((d) => d.id).distance(90).strength(0.6))
     .force("charge", d3.forceManyBody().strength(-260))
     .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("x", d3.forceX(() => width / 2).strength(0.06))
+    .force("y", d3.forceY(() => height / 2).strength(0.06))
     .force("collide", d3.forceCollide(24));
 
   const positions = new Map();
@@ -29,6 +31,8 @@ export function createGraph(svgEl, { onSelect }) {
     width = svgEl.clientWidth || width;
     height = svgEl.clientHeight || height;
     sim.force("center", d3.forceCenter(width / 2, height / 2));
+    sim.force("x").x(width / 2);
+    sim.force("y").y(height / 2);
 
     const nodes = caseData.entities.map((e) => Object.assign(positions.get(e.id) ?? {}, { id: e.id, type: e.type, value: e.value, added_by: e.added_by }));
     nodes.forEach((n) => positions.set(n.id, n));
