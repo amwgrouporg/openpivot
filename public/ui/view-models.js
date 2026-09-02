@@ -9,6 +9,11 @@ export function visibleCandidates(caseData, candidateMap, entityId) {
   return (candidateMap.get(entityId) ?? []).filter((candidate) => !dismissed.has(candidateKey(entityId, candidate)));
 }
 
+export function dismissedCandidates(caseData, candidateMap, entityId) {
+  const dismissed = new Set(caseData.ui?.dismissed_candidates ?? []);
+  return (candidateMap.get(entityId) ?? []).filter((candidate) => dismissed.has(candidateKey(entityId, candidate)));
+}
+
 export function relationshipView(caseData, relationship) {
   const entity = (id) => caseData.entities.find((item) => item.id === id) ?? { id, type: "unknown", value: id, missing: true };
   const citations = (relationship.citations ?? []).map((citation) => {

@@ -137,6 +137,7 @@ export function removeEntity(c, id, actor) {
     readings: c.readings.filter((item) => item.entity_id === id),
     evidenceEntityIds: c.evidence.map((item) => ({ id: item.id, entity_ids: [...item.entity_ids] })),
     evidenceReadingIds: c.evidence.map((item) => ({ id: item.id, reading_id: item.reading_id ?? null })),
+    linkCitations: c.links.map((item) => ({ id: item.id, citations: [...(item.citations ?? [])] })),
     runs: (c.runs ?? []).filter((item) => item.entity_id === id),
     graphPosition: c.ui?.graph_positions?.[id] ?? null,
     dismissedCandidates: [...(c.ui?.dismissed_candidates ?? [])],
@@ -145,6 +146,7 @@ export function removeEntity(c, id, actor) {
   c.links = c.links.filter((item) => item.from !== id && item.to !== id);
   c.readings = c.readings.filter((item) => item.entity_id !== id);
   const removedReadingIds = new Set(snapshot.readings.map((item) => item.id));
+  c.links.forEach((item) => { item.citations = (item.citations ?? []).filter((citation) => citation.kind !== "reading" || !removedReadingIds.has(citation.id)); });
   c.evidence.forEach((item) => {
     item.entity_ids = item.entity_ids.filter((entityId) => entityId !== id);
     if (removedReadingIds.has(item.reading_id)) item.reading_id = null;
@@ -171,6 +173,10 @@ export function restoreRemoval(c, snapshot) {
   for (const saved of snapshot.evidenceReadingIds) {
     const evidence = c.evidence.find((item) => item.id === saved.id);
     if (evidence) evidence.reading_id = saved.reading_id;
+  }
+  for (const saved of snapshot.linkCitations) {
+    const link = c.links.find((item) => item.id === saved.id);
+    if (link) link.citations = [...saved.citations];
   }
   c.runs ??= [];
   c.runs.push(...snapshot.runs.filter((item) => !c.runs.some((run) => run.id === item.id)));
@@ -334,11 +340,11 @@ export function candidatesFrom(c, entity, env) {
 }
 
 function markdownText(value) {
-  return String(value ?? "")
+  return String(value ?? "").replace(/\r?\n/g, " ")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/([\\`*_[\]{}()#+!|])/g, "\\$1");
+    .replace(/([\\`*_[\]{}()#+!|~])/g, "\\$1");
 }
 
 function markdownBody(value) {
@@ -351,6 +357,13 @@ function markdownUrl(value) {
     if (!["http:", "https:"].includes(url.protocol)) return markdownText(value);
     return url.href.replace(/</g, "%3C").replace(/>/g, "%3E");
   } catch { return markdownText(value); }
+}
+
+function markdownLiteralBlock(value) {
+  const text = String(value ?? "").replace(/\r\n/g, "\n");
+  const longest = Math.max(0, ...[...text.matchAll(/`+/g)].map((match) => match[0].length));
+  const fence = "`".repeat(Math.max(3, longest + 1));
+  return `${fence}text\n${text}\n${fence}`;
 }
 
 export function exportMarkdown(c) {
@@ -373,7 +386,7 @@ export function exportMarkdown(c) {
     for (const l of rejected) lines.push(`- ${markdownText(e(l.from)?.value ?? l.from)} → ${markdownText(e(l.to)?.value ?? l.to)} (proposed by ${markdownText(l.asserted_by)}, rejected by ${markdownText(l.reviewed_by)}): ${markdownText(l.rationale)}`);
   }
   lines.push("", "## Evidence", "");
-  for (const v of c.evidence) lines.push(`- ${markdownUrl(v.url)}${v.archived_url ? ` (archived: ${markdownUrl(v.archived_url)})` : ""} -- captured ${markdownText(v.captured_at)} by ${markdownText(v.added_by)}; entities: ${v.entity_ids.map((id) => markdownText(e(id)?.value ?? id)).join(", ") || "none"}`, `  > ${markdownText(v.quote).replace(/\n/g, "\n  > ")}`);
+  for (const v of c.evidence) lines.push(`- ${markdownUrl(v.url)}${v.archived_url ? ` (archived: ${markdownUrl(v.archived_url)})` : ""} -- captured ${markdownText(v.captured_at)} by ${markdownText(v.added_by)}; entities: ${v.entity_ids.map((id) => markdownText(e(id)?.value ?? id)).join(", ") || "none"}`, "", markdownLiteralBlock(v.quote));
   lines.push("", "## Sensor readings", "");
   for (const r of c.readings) lines.push(`- ${markdownText(e(r.entity_id)?.value ?? r.entity_id)} / ${markdownText(r.sensor)} [${markdownText(r.status)}] ${markdownText(r.fetched_at)}: ${markdownText(r.summary)}${r.source_url ? ` <${markdownUrl(r.source_url)}>` : ""}`);
   lines.push("", "## Findings memo", "", "### Analyst", "", markdownBody(c.memo.human) || "(empty)", "", `### Agent${c.memo.agent_updated_at ? ` (updated ${markdownText(c.memo.agent_updated_at)})` : ""}`, "", markdownBody(c.memo.agent) || "(empty)", "");

@@ -12,6 +12,7 @@ export function createCaseActions({ getCase, persist, setUi, runEntityPivot }) {
       const entity = findEntity(getCase(), id);
       if (!entity) throw new Error("entity not found");
       setUi({ selected: id, view: "entities" });
+      save({ preserveUndo: true });
       return entity;
     },
     addEntity(input) {
@@ -129,4 +130,16 @@ export function restoreFormState(root, state) {
     active.focus?.();
     if (state.selection && typeof active.setSelectionRange === "function") active.setSelectionRange(...state.selection);
   }
+}
+
+export function resetTransientUi(ui) {
+  ui.selected = null;
+  ui.activeRun = null;
+  ui.evidenceDraft = null;
+  ui.toast = null;
+  ui.modal = null;
+  ui.returnFocus = null;
+  ui.focusRelationship = null;
+  ui.skipFormRestore = true;
+  return ui;
 }

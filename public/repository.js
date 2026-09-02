@@ -1,5 +1,6 @@
 export const CASE_KEY_V1 = "openpivot.case.v1";
 export const CASE_KEY_V2 = "openpivot.case.v2";
+export const CASE_KEY_V2_RECOVERY = "openpivot.case.v2.recovery";
 
 const clone = (value) => (typeof structuredClone === "function"
   ? structuredClone(value)
@@ -90,6 +91,25 @@ function normalizeV2(input) {
   return value;
 }
 
+function repairStoredV2(input) {
+  if (!isValidCase(input) || input.version !== 2) throw new Error("unrecoverable v2 case");
+  const value = clone(input);
+  value.entities = value.entities.filter((item) => isRecord(item) && typeof item.id === "string" && typeof item.type === "string" && typeof item.value === "string").map((item) => ({ ...item, notes: typeof item.notes === "string" ? item.notes : "", added_by: item.added_by === "agent" ? "agent" : "human", added_at: typeof item.added_at === "string" ? item.added_at : value.created_at }));
+  const entityIds = new Set(value.entities.map((item) => item.id));
+  value.readings = value.readings.filter((item) => isRecord(item) && typeof item.id === "string" && entityIds.has(item.entity_id) && typeof item.sensor === "string" && ["ok", "indeterminate"].includes(item.status)).map((item) => ({ ...item, requested_by: item.requested_by === "human" ? "human" : "agent" }));
+  const readingIds = new Set(value.readings.map((item) => item.id));
+  value.evidence = value.evidence.filter((item) => isRecord(item) && typeof item.id === "string" && typeof item.url === "string" && typeof item.quote === "string").map((item) => ({ ...item, entity_ids: Array.isArray(item.entity_ids) ? item.entity_ids.filter((id) => entityIds.has(id)) : [], added_by: item.added_by === "human" ? "human" : "agent", reading_id: readingIds.has(item.reading_id) ? item.reading_id : null, archive_status: item.archive_status ?? (item.archived_url ? "confirmed" : "not_requested"), archive_check_url: item.archive_check_url ?? null }));
+  const evidenceIds = new Set(value.evidence.map((item) => item.id));
+  value.links = value.links.filter((item) => isRecord(item) && typeof item.id === "string" && entityIds.has(item.from) && entityIds.has(item.to) && typeof item.rationale === "string" && ["proposed", "accepted", "rejected"].includes(item.status)).map((item) => ({ ...item, asserted_by: item.asserted_by === "human" ? "human" : "agent", citations: (Array.isArray(item.citations) ? item.citations : []).filter((citation) => citation?.kind === "reading" ? readingIds.has(citation.id) : citation?.kind === "evidence" && evidenceIds.has(citation.id)) }));
+  value.runs = (Array.isArray(value.runs) ? value.runs : []).filter((item) => isRecord(item) && typeof item.id === "string" && entityIds.has(item.entity_id) && ["ok", "indeterminate"].includes(item.status)).map((item) => ({ ...item, requested_by: item.requested_by === "human" ? "human" : "agent", sensors: Array.isArray(item.sensors) ? item.sensors : [] }));
+  value.log = value.log.filter((item) => isRecord(item) && typeof item.ts === "string" && typeof item.action === "string" && typeof item.detail === "string").map((item) => ({ ...item, actor: item.actor === "human" ? "human" : "agent" }));
+  value.ui = isRecord(value.ui) ? value.ui : {};
+  value.ui.selected_entity_id = entityIds.has(value.ui.selected_entity_id) ? value.ui.selected_entity_id : null;
+  value.ui.graph_positions = Object.fromEntries(Object.entries(isRecord(value.ui.graph_positions) ? value.ui.graph_positions : {}).filter(([id, position]) => entityIds.has(id) && isRecord(position) && Number.isFinite(position.x) && Number.isFinite(position.y)));
+  value.ui.dismissed_candidates = (Array.isArray(value.ui.dismissed_candidates) ? value.ui.dismissed_candidates : []).filter((key) => typeof key === "string");
+  return value;
+}
+
 export function createLocalCaseRepository(storage) {
   if (!storage || typeof storage.getItem !== "function" || typeof storage.setItem !== "function") {
     throw new Error("storage is required");
@@ -106,13 +126,27 @@ export function createLocalCaseRepository(storage) {
     load() {
       const current = storage.getItem(CASE_KEY_V2);
       if (current) {
-        try { return normalizeV2(JSON.parse(current)); } catch { /* fall through to backup */ }
+        let parsed;
+        try { parsed = JSON.parse(current); } catch { parsed = null; }
+        try { return normalizeV2(parsed); }
+        catch {
+          try {
+            const repaired = repairStoredV2(parsed);
+            try { storage.setItem(CASE_KEY_V2_RECOVERY, current); } catch { /* the primary record remains untouched */ }
+            recoveryNotice = "OpenPivot repaired inconsistent references in this case without overwriting the original v2 record. Export the repaired case after reviewing it.";
+            return repaired;
+          } catch {
+            try { storage.setItem(CASE_KEY_V2_RECOVERY, current); } catch { /* the primary record remains untouched */ }
+            recoveryNotice = "OpenPivot could not read the current v2 case. The original record remains intact; a recoverable case is shown instead.";
+          }
+        }
       }
       const legacy = storage.getItem(CASE_KEY_V1);
       if (legacy) {
         let migrated;
         try { migrated = migrateCaseV1(JSON.parse(legacy)); }
         catch { return createEmptyCase(); }
+        if (current) return migrated;
         try { return save(migrated); }
         catch {
           recoveryNotice = "OpenPivot loaded your legacy case but could not save the migrated case. Export it before continuing; the original v1 case remains intact.";

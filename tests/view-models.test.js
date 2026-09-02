@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildReviewQueue,
   candidateKey,
+  dismissedCandidates,
   evidenceDraftFromReading,
   relationshipView,
   reportSources,
@@ -39,6 +40,14 @@ test("dismissed candidates are hidden without changing the candidate input", () 
 
   assert.deepEqual(visibleCandidates(caseData, candidateMap, "ent_domain"), []);
   assert.equal(candidateMap.get("ent_domain").length, 1);
+});
+
+test("dismissed candidates remain available for persistent restoration", () => {
+  const caseData = fixtureCase();
+  const candidate = candidateMap.get("ent_domain")[0];
+  caseData.ui.dismissed_candidates = [candidateKey("ent_domain", candidate)];
+
+  assert.deepEqual(dismissedCandidates(caseData, candidateMap, "ent_domain"), [candidate]);
 });
 
 test("relationship view resolves cited reading provenance", () => {
@@ -108,9 +117,8 @@ test("markdown export renders untrusted fields literally", () => {
 
   const markdown = exportMarkdown(caseData);
 
-  assert.doesNotMatch(markdown, /<script>/);
   assert.doesNotMatch(markdown, /<img /);
   assert.doesNotMatch(markdown, /\[click\]\(javascript:/);
   assert.match(markdown, /\\\*not emphasis\\\*/);
-  assert.match(markdown, /\\# heading/);
+  assert.match(markdown, /```+text\n# heading\n<script>alert\(1\)<\/script>\n```+/);
 });

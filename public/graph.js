@@ -2,6 +2,10 @@
 // positions testable even when D3 is unavailable.
 const COLORS = { domain: "#6ea8fe", ip: "#f2bd4a", url: "#59d48b", org: "#bd91ff", document: "#9aa7b7", claim: "#ff7b72" };
 
+export function mergeGraphPositions(current, visible, { replace = false } = {}) {
+  return replace ? { ...visible } : { ...(current ?? {}), ...(visible ?? {}) };
+}
+
 export function graphListModel(caseData, filters = {}) {
   const allowedTypes = filters.types?.length ? new Set(filters.types) : null;
   const allowedStatuses = filters.statuses?.length
@@ -64,7 +68,7 @@ export function createGraph(svgEl, options = {}) {
     positionTimer = setTimeout(() => {
       const saved = {};
       for (const node of nodesRef) if (Number.isFinite(node.x) && Number.isFinite(node.y)) saved[node.id] = { x: Math.round(node.x), y: Math.round(node.y) };
-      onPositionsChange(saved);
+      onPositionsChange(saved, { replace: false });
     }, 180);
   }
 
@@ -150,8 +154,10 @@ export function createGraph(svgEl, options = {}) {
   function resetLayout() {
     positions.clear();
     for (const node of nodesRef) { node.fx = null; node.fy = null; delete node.x; delete node.y; }
-    onPositionsChange({});
-    simulation.alpha(1).restart();
+    onPositionsChange({}, { replace: true });
+    if (reducedMotion) {
+      simulation.alpha(1).tick(80).stop();
+    } else simulation.alpha(1).restart();
   }
 
   function selectEntity(id) {

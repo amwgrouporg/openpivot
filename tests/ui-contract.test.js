@@ -4,7 +4,7 @@ import { actorBadge, safeLink, statusBadge, typeBadge } from "../public/ui/compo
 import { renderShell } from "../public/ui/shell.js";
 import { renderOverview } from "../public/ui/overview.js";
 import { renderEntities } from "../public/ui/entities.js";
-import { captureFormState, createCaseActions, restoreFormState } from "../public/ui/events.js";
+import { captureFormState, createCaseActions, resetTransientUi, restoreFormState } from "../public/ui/events.js";
 import { renderRelationships } from "../public/ui/relationships.js";
 import { renderEvidence } from "../public/ui/evidence.js";
 import { renderReport } from "../public/ui/report.js";
@@ -108,6 +108,18 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   assert.match(rendered.workbenchHtml, /running/);
   assert.match(rendered.workbenchHtml, /data-action="run-pivot"[^>]*disabled/);
   assert.doesNotMatch(rendered.contentHtml, /disabled[^>]*data-view-action/);
+});
+
+test("entity workbench exposes persistent restoration for dismissed candidates", () => {
+  const caseData = newCase("Dismissed");
+  const selected = { id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" };
+  caseData.entities.push(selected);
+  const candidate = { type: "domain", value: "www.example.com", why: "certificate", source_reading_id: "rdg_1" };
+  const rendered = renderEntities({ caseData, selected, candidates: [], dismissedCandidates: [candidate], activeRun: null });
+
+  assert.match(rendered.workbenchHtml, /Dismissed candidates/);
+  assert.match(rendered.workbenchHtml, /www\.example\.com/);
+  assert.match(rendered.workbenchHtml, /data-action="restore-candidate"/);
 });
 
 test("add-and-propose candidate never bypasses human review", () => {
@@ -240,4 +252,19 @@ test("form state capture and restore preserves unsaved values and focus selectio
   assert.equal(controls[1].checked, true);
   assert.equal(root.ownerDocument.activeElement, controls[0]);
   assert.deepEqual([controls[0].selectionStart, controls[0].selectionEnd], [8, 15]);
+});
+
+test("case replacement clears transient UI and disables old undo", () => {
+  let caseData = newCase("Before import");
+  caseData.entities.push({ id: "ent_old", type: "domain", value: "old.example", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
+  const actions = createCaseActions({ getCase: () => caseData, persist() {}, setUi() {}, runEntityPivot: async () => ({}) });
+  actions.removeEntity("ent_old");
+  const ui = { selected: "ent_old", activeRun: {}, evidenceDraft: {}, toast: { undo: true }, modal: {}, returnFocus: "button", focusRelationship: "lnk_1", skipFormRestore: false };
+
+  actions.invalidateUndo();
+  caseData = newCase("Imported");
+  resetTransientUi(ui);
+
+  assert.throws(() => actions.undoRemoval(), /nothing to undo/i);
+  assert.deepEqual(ui, { selected: null, activeRun: null, evidenceDraft: null, toast: null, modal: null, returnFocus: null, focusRelationship: null, skipFormRestore: true });
 });

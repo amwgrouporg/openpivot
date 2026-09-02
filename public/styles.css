@@ -254,6 +254,10 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
 .reading-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; color: var(--muted); font-size: 10px; }
 .reading-footer .button { margin-left: auto; }
 .candidate-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.dismissed-list { display: grid; gap: 5px; }
+.dismissed-candidate { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 8px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); }
+.dismissed-candidate > span { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.dismissed-candidate .selector { color: var(--muted); }
 .danger-zone { margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,118,110,.2); }
 .placeholder-view { max-width: 680px; margin: 80px auto; text-align: center; color: var(--muted); }
 .activity-log { display: grid; gap: 7px; }

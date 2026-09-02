@@ -100,6 +100,23 @@ test("repository validates nested records before importing", () => {
   assert.equal(repository.load().evidence.length, 0);
 });
 
+test("stored v2 cases are repaired without overwriting the original record", () => {
+  const current = migrateCaseV1(legacyCase());
+  current.runs.push({ id: "run_orphan", entity_id: "ent_missing", requested_by: "agent", started_at: "2026-09-01T10:00:00.000Z", completed_at: "2026-09-01T10:00:01.000Z", status: "ok", sensors: [] });
+  const raw = JSON.stringify(current);
+  const storage = memoryStorage([["openpivot.case.v2", raw]]);
+  const repository = createLocalCaseRepository(storage);
+
+  const loaded = repository.load();
+
+  assert.equal(loaded.title, "Legacy investigation");
+  assert.equal(loaded.entities.length, 1);
+  assert.deepEqual(loaded.runs, []);
+  assert.match(repository.getRecoveryNotice(), /repaired/i);
+  assert.equal(storage.values.get("openpivot.case.v2"), raw);
+  assert.equal(storage.values.get("openpivot.case.v2.recovery"), raw);
+});
+
 test("candidate dismissal is reversible and deduplicated", () => {
   const caseData = newCase("Dismissals");
 
@@ -116,8 +133,12 @@ test("entity removal snapshot restores affected records", () => {
   caseData.entities = [
     { id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" },
     { id: "ent_2", type: "ip", value: "192.0.2.1", notes: "", added_by: "agent", added_at: "2026-09-01T10:01:00.000Z" },
+    { id: "ent_3", type: "org", value: "Example Org", notes: "", added_by: "human", added_at: "2026-09-01T10:01:30.000Z" },
   ];
-  caseData.links = [{ id: "lnk_1", from: "ent_1", to: "ent_2", rationale: "DNS", asserted_by: "agent", status: "proposed", at: "2026-09-01T10:02:00.000Z", citations: [] }];
+  caseData.links = [
+    { id: "lnk_1", from: "ent_1", to: "ent_2", rationale: "DNS", asserted_by: "agent", status: "proposed", at: "2026-09-01T10:02:00.000Z", citations: [] },
+    { id: "lnk_2", from: "ent_1", to: "ent_3", rationale: "Owner", asserted_by: "agent", status: "proposed", at: "2026-09-01T10:02:30.000Z", citations: [{ kind: "reading", id: "rdg_1" }] },
+  ];
   caseData.readings = [{ id: "rdg_1", entity_id: "ent_2", sensor: "rdap", status: "ok" }];
   caseData.evidence = [{ id: "evd_1", entity_ids: ["ent_2"], url: "https://example.com", quote: "quote", reading_id: "rdg_1" }];
   caseData.runs = [{ id: "run_1", entity_id: "ent_2", requested_by: "agent", started_at: "2026-09-01T10:00:00.000Z", completed_at: "2026-09-01T10:00:01.000Z", status: "ok", sensors: [] }];
@@ -125,8 +146,9 @@ test("entity removal snapshot restores affected records", () => {
   caseData.ui.dismissed_candidates = ["ent_2:domain:host.example", "ent_1:ip:192.0.2.1"];
 
   const snapshot = removeEntity(caseData, "ent_2", "human");
-  assert.equal(caseData.entities.length, 1);
-  assert.equal(caseData.links.length, 0);
+  assert.equal(caseData.entities.length, 2);
+  assert.equal(caseData.links.length, 1);
+  assert.deepEqual(caseData.links[0].citations, []);
   assert.equal(caseData.readings.length, 0);
   assert.deepEqual(caseData.evidence[0].entity_ids, []);
   assert.equal(caseData.evidence[0].reading_id, null);
@@ -135,8 +157,9 @@ test("entity removal snapshot restores affected records", () => {
   assert.deepEqual(caseData.ui.dismissed_candidates, ["ent_1:ip:192.0.2.1"]);
 
   restoreRemoval(caseData, snapshot);
-  assert.equal(caseData.entities.length, 2);
-  assert.equal(caseData.links.length, 1);
+  assert.equal(caseData.entities.length, 3);
+  assert.equal(caseData.links.length, 2);
+  assert.deepEqual(caseData.links.find((link) => link.id === "lnk_2").citations, [{ kind: "reading", id: "rdg_1" }]);
   assert.equal(caseData.readings.length, 1);
   assert.deepEqual(caseData.evidence[0].entity_ids, ["ent_2"]);
   assert.equal(caseData.evidence[0].reading_id, "rdg_1");

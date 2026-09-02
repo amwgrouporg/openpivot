@@ -11,7 +11,7 @@ Command:
 node --test tests/*.test.js
 ```
 
-Result: 100 tests passed, 0 failed, 0 skipped.
+Result: 105 tests passed, 0 failed, 0 skipped.
 
 Coverage added for:
 
@@ -34,6 +34,12 @@ Coverage added for:
 - literal Markdown export of untrusted fields;
 - dependent-run and reference cleanup during undoable removal;
 - form-state capture and focus restoration during rerenders.
+- tolerant, non-overwriting repair of inconsistent stored v2 references;
+- citation cleanup/restoration during entity removal;
+- hidden graph-position preservation while filters are active;
+- persistent restoration of dismissed candidates;
+- cross-case undo invalidation and transient-state reset;
+- fenced literal export of untrusted evidence blocks.
 
 ## Local WebMCP flow
 

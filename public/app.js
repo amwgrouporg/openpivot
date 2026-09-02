@@ -6,13 +6,13 @@ import { sensor } from "./api.js";
 import { getModelContext, createRegistry } from "./webmcp.js";
 import { createToolset } from "./tools.js";
 import { PIVOT_SPECS, runPivot } from "./runs.js";
-import { createGraph } from "./graph.js";
-import { buildReviewQueue, candidateKey, evidenceDraftFromReading, visibleCandidates } from "./ui/view-models.js";
+import { createGraph, mergeGraphPositions } from "./graph.js";
+import { buildReviewQueue, candidateKey, dismissedCandidates, evidenceDraftFromReading, visibleCandidates } from "./ui/view-models.js";
 import { escapeHtml, icon } from "./ui/components.js";
 import { renderShell } from "./ui/shell.js";
 import { renderOverview } from "./ui/overview.js";
 import { renderEntities } from "./ui/entities.js";
-import { captureFormState, createCaseActions, parseCandidate, restoreFormState } from "./ui/events.js";
+import { captureFormState, createCaseActions, parseCandidate, resetTransientUi, restoreFormState } from "./ui/events.js";
 import { renderRelationships } from "./ui/relationships.js";
 import { renderEvidence } from "./ui/evidence.js";
 import { renderReport } from "./ui/report.js";
@@ -155,7 +155,7 @@ function activeContent(queue, webmcpState) {
   if (ui.view === "overview") return { contentHtml: renderOverview({ caseData, queue, webmcpState }), workbenchHtml: "" };
   if (ui.view === "entities") {
     const selected = ui.selected ? findEntity(caseData, ui.selected) : null;
-    return renderEntities({ caseData, selected, candidates: selected ? visibleCandidates(caseData, ui.candidates, selected.id) : [], activeRun: ui.activeRun, graphFilters: ui.graphFilters });
+    return renderEntities({ caseData, selected, candidates: selected ? visibleCandidates(caseData, ui.candidates, selected.id) : [], dismissedCandidates: selected ? dismissedCandidates(caseData, ui.candidates, selected.id) : [], activeRun: ui.activeRun, graphFilters: ui.graphFilters });
   }
   if (ui.view === "relationships") return { contentHtml: renderRelationships({ caseData, statusFilter: ui.relationshipFilter }), workbenchHtml: "" };
   if (ui.view === "evidence") return { contentHtml: renderEvidence({ caseData, draft: ui.evidenceDraft }), workbenchHtml: "" };
@@ -202,7 +202,7 @@ function render() {
       graph = createGraph(svg, {
         onSelectEntity: (id) => { ui.selected = id; caseData.ui.selected_entity_id = id; render(); },
         onSelectLink: (id) => { ui.view = "relationships"; ui.relationshipFilter = "all"; ui.focusRelationship = id; render(); },
-        onPositionsChange: (positions) => { actions.invalidateUndo(); caseData.ui.graph_positions = positions; repository.save(caseData); },
+        onPositionsChange: (positions, options) => { actions.invalidateUndo(); caseData.ui.graph_positions = mergeGraphPositions(caseData.ui.graph_positions, positions, options); repository.save(caseData); },
         reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
       });
       graph.select(ui.selected);
@@ -295,13 +295,15 @@ app.addEventListener("change", (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     file.text().then(async (text) => {
+      actions.invalidateUndo();
+      resetTransientUi(ui);
       caseData = repository.importJson(text);
       ui.selected = caseData.ui.selected_entity_id;
       ui.view = "overview";
-      ui.evidenceDraft = null;
       hydrateCandidates();
       persist();
       await toolset.syncDynamicTools();
+      requestAnimationFrame(() => app.querySelector(".main-surface")?.focus());
     }).catch(showError);
   }
 });
@@ -382,7 +384,7 @@ app.addEventListener("click", async (event) => {
       download(repository.exportJson(caseData), "application/json", filename);
     }
     if (action === "new-case") { ui.returnFocus = '[data-action="new-case"]'; ui.modal = { kind: "new-case" }; render(); }
-    if (action === "confirm-new-case") { caseData = repository.create(); ui.selected = null; ui.candidates.clear(); ui.modal = null; ui.view = "overview"; ui.skipFormRestore = true; actions.invalidateUndo(); persist(); await toolset.syncDynamicTools(); }
+    if (action === "confirm-new-case") { actions.invalidateUndo(); resetTransientUi(ui); caseData = repository.create(); ui.candidates.clear(); ui.view = "overview"; persist(); await toolset.syncDynamicTools(); requestAnimationFrame(() => app.querySelector("#quick-value")?.focus()); }
     if (action === "cancel-modal") { ui.modal = null; render(); restoreReturnFocus(); }
     if (action === "select-entity") { actions.selectEntity(id); ui.view = "entities"; render(); }
     if (action === "close-workbench") { ui.selected = null; caseData.ui.selected_entity_id = null; persist(); }
@@ -404,7 +406,7 @@ app.addEventListener("click", async (event) => {
       ui.modal = { kind: "remove", id, label: entity.value, affected: { links: caseData.links.filter((link) => link.from === id || link.to === id).length, readings: caseData.readings.filter((reading) => reading.entity_id === id).length, evidence: caseData.evidence.filter((evidence) => evidence.entity_ids.includes(id)).length } };
       render();
     }
-    if (action === "confirm-remove-entity") { actions.removeEntity(id); ui.modal = null; ui.toast = { message: "Entity removed", undo: true }; await toolset.syncDynamicTools(); render(); }
+    if (action === "confirm-remove-entity") { actions.removeEntity(id); ui.modal = null; ui.returnFocus = null; ui.toast = { message: "Entity removed", undo: true }; await toolset.syncDynamicTools(); render(); requestAnimationFrame(() => app.querySelector('[data-action="undo-removal"]')?.focus()); }
     if (action === "undo-removal") { actions.undoRemoval(); ui.toast = { message: "Entity restored", undo: false }; await toolset.syncDynamicTools(); render(); }
     if (action === "dismiss-toast") { ui.toast = null; render(); }
     if (action === "dismiss-notice") { ui.notice = ""; render(); }

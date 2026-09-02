@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { graphListModel } from "../public/graph.js";
+import { graphListModel, mergeGraphPositions } from "../public/graph.js";
 import { newCase } from "../public/store.js";
 
 function graphCase() {
@@ -40,4 +40,10 @@ test("type filter removes links whose endpoints are not visible", () => {
   const model = graphListModel(graphCase(), { types: ["domain", "org"], includeRejected: true });
   assert.deepEqual(model.nodes.map((node) => node.type), ["domain", "org"]);
   assert.deepEqual(model.links.map((link) => link.id), ["lnk_3"]);
+});
+
+test("filtered graph position updates preserve hidden node positions", () => {
+  const current = { ent_1: { x: 10, y: 20 }, ent_hidden: { x: 80, y: 90 } };
+  assert.deepEqual(mergeGraphPositions(current, { ent_1: { x: 30, y: 40 } }), { ent_1: { x: 30, y: 40 }, ent_hidden: { x: 80, y: 90 } });
+  assert.deepEqual(mergeGraphPositions(current, {}, { replace: true }), {});
 });
