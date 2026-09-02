@@ -36,6 +36,7 @@ const ui = {
   activityOpen: false,
   evidenceDraft: null,
   relationshipFilter: "all",
+  graphFilters: { status: "active" },
 };
 
 function hydrateCandidates() {
@@ -152,7 +153,7 @@ function activeContent(queue, webmcpState) {
   if (ui.view === "overview") return { contentHtml: renderOverview({ caseData, queue, webmcpState }), workbenchHtml: "" };
   if (ui.view === "entities") {
     const selected = ui.selected ? findEntity(caseData, ui.selected) : null;
-    return renderEntities({ caseData, selected, candidates: selected ? visibleCandidates(caseData, ui.candidates, selected.id) : [], activeRun: ui.activeRun });
+    return renderEntities({ caseData, selected, candidates: selected ? visibleCandidates(caseData, ui.candidates, selected.id) : [], activeRun: ui.activeRun, graphFilters: ui.graphFilters });
   }
   if (ui.view === "relationships") return { contentHtml: renderRelationships({ caseData, statusFilter: ui.relationshipFilter }), workbenchHtml: "" };
   if (ui.view === "evidence") return { contentHtml: renderEvidence({ caseData, draft: ui.evidenceDraft }), workbenchHtml: "" };
@@ -180,9 +181,15 @@ function render() {
   if (ui.view === "entities") {
     const svg = document.getElementById("graph");
     if (svg) {
-      graph = createGraph(svg, { onSelect: (id) => { ui.selected = id; caseData.ui.selected_entity_id = id; render(); } });
+      graph = createGraph(svg, {
+        onSelectEntity: (id) => { ui.selected = id; caseData.ui.selected_entity_id = id; render(); },
+        onSelectLink: () => { ui.view = "relationships"; ui.relationshipFilter = "all"; render(); },
+        onPositionsChange: (positions) => { caseData.ui.graph_positions = positions; repository.save(caseData); },
+        reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+      });
       graph.select(ui.selected);
-      graph.update(caseData);
+      const status = ui.graphFilters.status;
+      graph.update(caseData, status === "all" ? { includeRejected: true } : status === "active" ? {} : { statuses: [status] });
     }
   }
 }
@@ -233,6 +240,10 @@ app.addEventListener("change", (event) => {
   }
   if (event.target.dataset.control === "relationship-filter") {
     ui.relationshipFilter = event.target.value;
+    render();
+  }
+  if (event.target.dataset.control === "graph-status-filter") {
+    ui.graphFilters.status = event.target.value;
     render();
   }
   if (event.target.dataset.action === "import-json") {

@@ -99,6 +99,8 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   const rendered = renderEntities({ caseData, selected, candidates: [], activeRun });
 
   assert.match(rendered.contentHtml, /id="graph"/);
+  assert.match(rendered.contentHtml, /data-control="graph-status-filter"/);
+  assert.match(rendered.contentHtml, /data-graph-semantic/);
   assert.match(rendered.workbenchHtml, /example\.com/);
   assert.match(rendered.workbenchHtml, /dns/);
   assert.match(rendered.workbenchHtml, /running/);
