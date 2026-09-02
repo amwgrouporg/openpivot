@@ -34,7 +34,7 @@
 
 **Interfaces:**
 - Consumes: v2 case records and explicit reference timestamps.
-- Produces: `nodeMetadata(caseData)`, `neighborhoodIds(links, seedId, depth)`, `shortestPath(links, startId, endId)`, `connectedComponents(nodes, links)`, `filterGraph(caseData, filters)`, `parallelEdgeOffsets(links)`, `layoutTargets(nodes, links, options)`, `labelModeForCount(count, requested)`, `edgePresentation(link)`, and `nodeAccessibleName(node)`.
+- Produces: `nodeMetadata(caseData)`, `neighborhoodIds(links, seedId, depth)`, `shortestPath(links, startId, endId)`, `connectedComponents(nodes, links)`, `filterGraph(caseData, filters)`, `parallelEdgeOffsets(links)`, `layoutTargets(nodes, links, options)`, and `labelModeForCount(count, requested)`.
 
 - [ ] **Step 1: Write failing metadata, neighborhood, and path tests**
 
@@ -317,7 +317,7 @@ git commit -m "feat: add graph controls and path tracing"
 
 **Interfaces:**
 - Consumes: filtered nodes/edges with metadata, curve offsets, layout targets, selection, hover, path ids, label mode, and reduced motion.
-- Produces: directed curved paths, inline labels/citation counts, typed nodes with analytical rings/badges, hover/focus details, zoom percentage, fit selection, and a desktop minimap.
+- Produces: `edgePresentation(link)`, `nodeAccessibleName(node)`, directed curved paths, inline labels/citation counts, typed nodes with analytical rings/badges, hover/focus details, zoom percentage, fit selection, and a desktop minimap.
 
 - [ ] **Step 1: Write failing presentation tests**
 
