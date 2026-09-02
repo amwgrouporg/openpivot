@@ -103,6 +103,8 @@ test("repository validates nested records before importing", () => {
 test("stored v2 cases are repaired without overwriting the original record", () => {
   const current = migrateCaseV1(legacyCase());
   current.runs.push({ id: "run_orphan", entity_id: "ent_missing", requested_by: "agent", started_at: "2026-09-01T10:00:00.000Z", completed_at: "2026-09-01T10:00:01.000Z", status: "ok", sensors: [] });
+  current.entities.push({ id: "ent_bad", type: "person", value: "Unsupported", notes: "", added_by: "robot", added_at: "2026-09-01T10:00:00.000Z" });
+  current.memo.agent_updated_at = 42;
   const raw = JSON.stringify(current);
   const storage = memoryStorage([["openpivot.case.v2", raw]]);
   const repository = createLocalCaseRepository(storage);
@@ -112,6 +114,8 @@ test("stored v2 cases are repaired without overwriting the original record", () 
   assert.equal(loaded.title, "Legacy investigation");
   assert.equal(loaded.entities.length, 1);
   assert.deepEqual(loaded.runs, []);
+  assert.equal(loaded.memo.agent_updated_at, null);
+  assert.doesNotThrow(() => repository.exportJson(loaded));
   assert.match(repository.getRecoveryNotice(), /repaired/i);
   assert.equal(storage.values.get("openpivot.case.v2"), raw);
   assert.equal(storage.values.get("openpivot.case.v2.recovery"), raw);

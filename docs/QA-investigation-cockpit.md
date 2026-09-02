@@ -86,6 +86,9 @@ All three target widths rendered without horizontal body overflow. The applicati
 - Dialogs move focus inside, make the background inert, close on Escape, and restore focus to their trigger.
 - Candidate dismissal exposes Restore; Add consumes the candidate from the originating queue.
 - Entity notes are editable and recorded as an analyst action.
+- Navigation moves focus to the destination heading; entity selection moves it to the workbench title.
+- Graph filters restore focus to the activated filter, and closing the workbench returns focus to the entity row.
+- Relationship verdicts keep focus on the reviewed relationship card.
 
 ## Defects found and corrected during QA
 

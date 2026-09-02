@@ -104,6 +104,7 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   assert.match(rendered.contentHtml, /data-graph-connected/);
   assert.match(rendered.contentHtml, /data-graph-semantic/);
   assert.match(rendered.workbenchHtml, /example\.com/);
+  assert.match(rendered.workbenchHtml, /data-workbench-title[^>]*tabindex="-1"/);
   assert.match(rendered.workbenchHtml, /dns/);
   assert.match(rendered.workbenchHtml, /running/);
   assert.match(rendered.workbenchHtml, /data-action="run-pivot"[^>]*disabled/);

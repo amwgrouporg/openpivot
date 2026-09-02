@@ -94,20 +94,31 @@ function normalizeV2(input) {
 function repairStoredV2(input) {
   if (!isValidCase(input) || input.version !== 2) throw new Error("unrecoverable v2 case");
   const value = clone(input);
-  value.entities = value.entities.filter((item) => isRecord(item) && typeof item.id === "string" && typeof item.type === "string" && typeof item.value === "string").map((item) => ({ ...item, notes: typeof item.notes === "string" ? item.notes : "", added_by: item.added_by === "agent" ? "agent" : "human", added_at: typeof item.added_at === "string" ? item.added_at : value.created_at }));
+  const supportedTypes = new Set(["domain", "ip", "url", "org", "document", "claim"]);
+  const seenEntityIds = new Set();
+  value.entities = value.entities.filter((item) => {
+    if (!isRecord(item) || typeof item.id !== "string" || seenEntityIds.has(item.id) || !supportedTypes.has(item.type) || typeof item.value !== "string") return false;
+    seenEntityIds.add(item.id);
+    return true;
+  }).map((item) => ({ ...item, notes: typeof item.notes === "string" ? item.notes : "", added_by: item.added_by === "agent" ? "agent" : "human", added_at: typeof item.added_at === "string" ? item.added_at : value.created_at }));
   const entityIds = new Set(value.entities.map((item) => item.id));
   value.readings = value.readings.filter((item) => isRecord(item) && typeof item.id === "string" && entityIds.has(item.entity_id) && typeof item.sensor === "string" && ["ok", "indeterminate"].includes(item.status)).map((item) => ({ ...item, requested_by: item.requested_by === "human" ? "human" : "agent" }));
   const readingIds = new Set(value.readings.map((item) => item.id));
-  value.evidence = value.evidence.filter((item) => isRecord(item) && typeof item.id === "string" && typeof item.url === "string" && typeof item.quote === "string").map((item) => ({ ...item, entity_ids: Array.isArray(item.entity_ids) ? item.entity_ids.filter((id) => entityIds.has(id)) : [], added_by: item.added_by === "human" ? "human" : "agent", reading_id: readingIds.has(item.reading_id) ? item.reading_id : null, archive_status: item.archive_status ?? (item.archived_url ? "confirmed" : "not_requested"), archive_check_url: item.archive_check_url ?? null }));
+  value.evidence = value.evidence.filter((item) => isRecord(item) && typeof item.id === "string" && typeof item.url === "string" && typeof item.quote === "string").map((item) => ({ ...item, entity_ids: Array.isArray(item.entity_ids) ? item.entity_ids.filter((id) => entityIds.has(id)) : [], added_by: item.added_by === "human" ? "human" : "agent", reading_id: readingIds.has(item.reading_id) ? item.reading_id : null, archive_status: ["not_requested", "pending", "confirmed"].includes(item.archive_status) ? item.archive_status : item.archived_url ? "confirmed" : "not_requested", archive_check_url: typeof item.archive_check_url === "string" ? item.archive_check_url : null }));
   const evidenceIds = new Set(value.evidence.map((item) => item.id));
-  value.links = value.links.filter((item) => isRecord(item) && typeof item.id === "string" && entityIds.has(item.from) && entityIds.has(item.to) && typeof item.rationale === "string" && ["proposed", "accepted", "rejected"].includes(item.status)).map((item) => ({ ...item, asserted_by: item.asserted_by === "human" ? "human" : "agent", citations: (Array.isArray(item.citations) ? item.citations : []).filter((citation) => citation?.kind === "reading" ? readingIds.has(citation.id) : citation?.kind === "evidence" && evidenceIds.has(citation.id)) }));
-  value.runs = (Array.isArray(value.runs) ? value.runs : []).filter((item) => isRecord(item) && typeof item.id === "string" && entityIds.has(item.entity_id) && ["ok", "indeterminate"].includes(item.status)).map((item) => ({ ...item, requested_by: item.requested_by === "human" ? "human" : "agent", sensors: Array.isArray(item.sensors) ? item.sensors : [] }));
+  value.links = value.links.filter((item) => isRecord(item) && typeof item.id === "string" && entityIds.has(item.from) && entityIds.has(item.to) && typeof item.rationale === "string" && ["proposed", "accepted", "rejected"].includes(item.status)).map((item) => {
+    const repaired = { ...item, asserted_by: item.asserted_by === "human" ? "human" : "agent", citations: (Array.isArray(item.citations) ? item.citations : []).filter((citation) => citation?.kind === "reading" ? readingIds.has(citation.id) : citation?.kind === "evidence" && evidenceIds.has(citation.id)) };
+    if (item.reviewed_by !== "human" && item.reviewed_by !== "agent") delete repaired.reviewed_by;
+    return repaired;
+  });
+  value.runs = (Array.isArray(value.runs) ? value.runs : []).filter((item) => isRecord(item) && typeof item.id === "string" && entityIds.has(item.entity_id) && ["ok", "indeterminate"].includes(item.status)).map((item) => ({ ...item, requested_by: item.requested_by === "human" ? "human" : "agent", sensors: (Array.isArray(item.sensors) ? item.sensors : []).filter((sensor) => isRecord(sensor) && typeof sensor.name === "string" && ["queued", "running", "ok", "indeterminate"].includes(sensor.status)) }));
   value.log = value.log.filter((item) => isRecord(item) && typeof item.ts === "string" && typeof item.action === "string" && typeof item.detail === "string").map((item) => ({ ...item, actor: item.actor === "human" ? "human" : "agent" }));
   value.ui = isRecord(value.ui) ? value.ui : {};
   value.ui.selected_entity_id = entityIds.has(value.ui.selected_entity_id) ? value.ui.selected_entity_id : null;
   value.ui.graph_positions = Object.fromEntries(Object.entries(isRecord(value.ui.graph_positions) ? value.ui.graph_positions : {}).filter(([id, position]) => entityIds.has(id) && isRecord(position) && Number.isFinite(position.x) && Number.isFinite(position.y)));
   value.ui.dismissed_candidates = (Array.isArray(value.ui.dismissed_candidates) ? value.ui.dismissed_candidates : []).filter((key) => typeof key === "string");
-  return value;
+  value.memo.agent_updated_at = typeof value.memo.agent_updated_at === "string" ? value.memo.agent_updated_at : null;
+  return normalizeV2(value);
 }
 
 export function createLocalCaseRepository(storage) {

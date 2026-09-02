@@ -200,7 +200,7 @@ function render() {
     const svg = document.getElementById("graph");
     if (svg) {
       graph = createGraph(svg, {
-        onSelectEntity: (id) => { ui.selected = id; caseData.ui.selected_entity_id = id; render(); },
+        onSelectEntity: (id) => { ui.selected = id; caseData.ui.selected_entity_id = id; repository.save(caseData); render(); focusSelector("[data-workbench-title]"); },
         onSelectLink: (id) => { ui.view = "relationships"; ui.relationshipFilter = "all"; ui.focusRelationship = id; render(); },
         onPositionsChange: (positions, options) => { actions.invalidateUndo(); caseData.ui.graph_positions = mergeGraphPositions(caseData.ui.graph_positions, positions, options); repository.save(caseData); },
         reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
@@ -225,6 +225,15 @@ function restoreReturnFocus() {
   ui.returnFocus = null;
   if (!target) return;
   requestAnimationFrame(() => app.querySelector(target)?.focus());
+}
+
+function focusSelector(selector) {
+  requestAnimationFrame(() => {
+    const target = app.querySelector(selector);
+    if (!target) return;
+    if (!target.matches("button, input, select, textarea, a[href], [tabindex]")) target.setAttribute("tabindex", "-1");
+    target.focus();
+  });
 }
 
 function download(text, type, filename) {
@@ -252,10 +261,12 @@ app.addEventListener("submit", async (event) => {
       ui.skipFormRestore = true;
       actions.addEntity({ type: data.type, value: data.value, notes: data.notes });
       await toolset.syncDynamicTools();
+      focusSelector("[data-workbench-title]");
     }
     if (form.dataset.form === "add-relationship") {
       ui.skipFormRestore = true;
-      actions.createRelationship({ from: data.from, to: data.to, rationale: data.rationale, citations: [] });
+      const relationship = actions.createRelationship({ from: data.from, to: data.to, rationale: data.rationale, citations: [] });
+      ui.focusRelationship = relationship.id;
       ui.toast = { message: "Relationship added to the review queue", undo: false };
       render();
     }
@@ -266,6 +277,7 @@ app.addEventListener("submit", async (event) => {
       ui.evidenceDraft = null;
       ui.toast = { message: data.archive && archiveResult.archive_status === "pending" ? "Evidence attached; archive confirmation is pending" : "Evidence attached", undo: false };
       render();
+      focusSelector(".evidence-list h2");
     }
     if (form.dataset.form === "edit-notes") {
       actions.editEntityNotes(data.entity_id, data.notes);
@@ -286,10 +298,12 @@ app.addEventListener("change", (event) => {
   if (event.target.dataset.control === "relationship-filter") {
     ui.relationshipFilter = event.target.value;
     render();
+    focusSelector('[data-control="relationship-filter"]');
   }
   if (event.target.dataset.control === "graph-status-filter") {
     ui.graphFilters.status = event.target.value;
     render();
+    focusSelector('[data-control="graph-status-filter"]');
   }
   if (event.target.dataset.action === "import-json") {
     const file = event.target.files?.[0];
@@ -345,6 +359,7 @@ app.addEventListener("click", async (event) => {
     ui.view = view;
     ui.activityOpen = false;
     render();
+    focusSelector(".main-surface h1");
     return;
   }
   const graphAction = event.target.closest("[data-graph-action]")?.dataset.graphAction;
@@ -361,11 +376,13 @@ app.addEventListener("click", async (event) => {
     if (types.has(graphType)) types.delete(graphType); else types.add(graphType);
     ui.graphFilters.types = [...types];
     render();
+    focusSelector(`[data-graph-type="${CSS.escape(graphType)}"]`);
     return;
   }
   if (event.target.closest("[data-graph-connected]")) {
     ui.graphFilters.connected = !ui.graphFilters.connected;
     render();
+    focusSelector("[data-graph-connected]");
     return;
   }
   const element = event.target.closest("[data-action]");
@@ -378,6 +395,7 @@ app.addEventListener("click", async (event) => {
       download(exportMarkdown(caseData), "text/markdown", filename);
       log(caseData, "human", "export_case", filename);
       persist();
+      focusSelector('[data-action="export-markdown"]');
     }
     if (action === "export-json") {
       const filename = `${caseData.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "case"}.json`;
@@ -386,20 +404,21 @@ app.addEventListener("click", async (event) => {
     if (action === "new-case") { ui.returnFocus = '[data-action="new-case"]'; ui.modal = { kind: "new-case" }; render(); }
     if (action === "confirm-new-case") { actions.invalidateUndo(); resetTransientUi(ui); caseData = repository.create(); ui.candidates.clear(); ui.view = "overview"; persist(); await toolset.syncDynamicTools(); requestAnimationFrame(() => app.querySelector("#quick-value")?.focus()); }
     if (action === "cancel-modal") { ui.modal = null; render(); restoreReturnFocus(); }
-    if (action === "select-entity") { actions.selectEntity(id); ui.view = "entities"; render(); }
-    if (action === "close-workbench") { ui.selected = null; caseData.ui.selected_entity_id = null; persist(); }
-    if (action === "run-pivot") { actions.invalidateUndo(); await actions.runPivot(id, false); }
-    if (action === "run-pivot-archive") { actions.invalidateUndo(); await actions.runPivot(id, true); }
-    if (action === "add-candidate") { const candidate = parseCandidate(element); actions.addCandidate(element.dataset.parent, candidate); consumeCandidate(element.dataset.parent, candidate); await toolset.syncDynamicTools(); render(); }
-    if (action === "add-propose-candidate") { const candidate = parseCandidate(element); actions.addAndProposeCandidate(element.dataset.parent, candidate); consumeCandidate(element.dataset.parent, candidate); await toolset.syncDynamicTools(); render(); }
+    if (action === "select-entity") { actions.selectEntity(id); ui.view = "entities"; render(); focusSelector("[data-workbench-title]"); }
+    if (action === "close-workbench") { const closedId = ui.selected; ui.selected = null; caseData.ui.selected_entity_id = null; persist(); focusSelector(`.entity-row[data-id="${CSS.escape(closedId)}"]`); }
+    if (action === "run-pivot") { actions.invalidateUndo(); await actions.runPivot(id, false); focusSelector("[data-workbench-title]"); }
+    if (action === "run-pivot-archive") { actions.invalidateUndo(); await actions.runPivot(id, true); focusSelector("[data-workbench-title]"); }
+    if (action === "add-candidate") { const candidate = parseCandidate(element); actions.addCandidate(element.dataset.parent, candidate); consumeCandidate(element.dataset.parent, candidate); await toolset.syncDynamicTools(); render(); focusSelector("[data-workbench-title]"); }
+    if (action === "add-propose-candidate") { const candidate = parseCandidate(element); actions.addAndProposeCandidate(element.dataset.parent, candidate); consumeCandidate(element.dataset.parent, candidate); await toolset.syncDynamicTools(); render(); focusSelector("[data-workbench-title]"); }
     if (action === "dismiss-candidate") {
       const candidate = parseCandidate(element);
       const key = candidateKey(element.dataset.parent, candidate);
       actions.dismissCandidate(element.dataset.parent, candidate, key);
       ui.toast = { message: `${candidate.value} dismissed`, undo: false, restoreCandidateKey: key };
       render();
+      focusSelector(`[data-action="restore-candidate"][data-key="${CSS.escape(key)}"]`);
     }
-    if (action === "restore-candidate") { actions.restoreCandidate(element.dataset.key); ui.toast = { message: "Candidate restored", undo: false }; render(); }
+    if (action === "restore-candidate") { actions.restoreCandidate(element.dataset.key); ui.toast = { message: "Candidate restored", undo: false }; render(); focusSelector(".candidate-card [data-action='dismiss-candidate']"); }
     if (action === "request-remove-entity") {
       const entity = findEntity(caseData, id);
       ui.returnFocus = `[data-action="request-remove-entity"][data-id="${CSS.escape(id)}"]`;
@@ -407,15 +426,15 @@ app.addEventListener("click", async (event) => {
       render();
     }
     if (action === "confirm-remove-entity") { actions.removeEntity(id); ui.modal = null; ui.returnFocus = null; ui.toast = { message: "Entity removed", undo: true }; await toolset.syncDynamicTools(); render(); requestAnimationFrame(() => app.querySelector('[data-action="undo-removal"]')?.focus()); }
-    if (action === "undo-removal") { actions.undoRemoval(); ui.toast = { message: "Entity restored", undo: false }; await toolset.syncDynamicTools(); render(); }
+    if (action === "undo-removal") { actions.undoRemoval(); ui.toast = { message: "Entity restored", undo: false }; await toolset.syncDynamicTools(); render(); focusSelector("[data-workbench-title]"); }
     if (action === "dismiss-toast") { ui.toast = null; render(); }
     if (action === "dismiss-notice") { ui.notice = ""; render(); }
-    if (action === "toggle-activity") { ui.activityOpen = true; render(); }
-    if (action === "close-activity") { ui.activityOpen = false; render(); }
+    if (action === "toggle-activity") { ui.activityOpen = true; render(); focusSelector(".workbench h2"); }
+    if (action === "close-activity") { ui.activityOpen = false; render(); focusSelector('[data-action="toggle-activity"]'); }
     if (action === "open-relationship") { ui.view = "relationships"; ui.relationshipFilter = "all"; ui.focusRelationship = id; render(); }
-    if (action === "accept-relationship") { actions.setRelationshipStatus(id, "accepted"); ui.toast = { message: "Relationship accepted", undo: false }; render(); }
-    if (action === "reject-relationship") { actions.setRelationshipStatus(id, "rejected"); ui.toast = { message: "Relationship rejected", undo: false }; render(); }
-    if (action === "evidence-from-reading") { ui.evidenceDraft = evidenceDraftFromReading(caseData, id); ui.view = "evidence"; render(); }
+    if (action === "accept-relationship") { ui.focusRelationship = id; actions.setRelationshipStatus(id, "accepted"); ui.toast = { message: "Relationship accepted", undo: false }; render(); focusSelector(`[data-relationship-id="${CSS.escape(id)}"]`); }
+    if (action === "reject-relationship") { ui.focusRelationship = id; actions.setRelationshipStatus(id, "rejected"); ui.toast = { message: "Relationship rejected", undo: false }; render(); focusSelector(`[data-relationship-id="${CSS.escape(id)}"]`); }
+    if (action === "evidence-from-reading") { ui.evidenceDraft = evidenceDraftFromReading(caseData, id); ui.view = "evidence"; render(); focusSelector("#evidence-url"); }
   } catch (error) { showError(error); }
 });
 
