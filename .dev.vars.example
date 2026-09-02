@@ -1,0 +1,4 @@
+# Copy to .dev.vars for local `wrangler dev`. In production set these with `wrangler secret put`.
+BRAVE_API_KEY=
+IPINFO_TOKEN=
+URLSCAN_API_KEY=

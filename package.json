@@ -1,0 +1,16 @@
+{
+  "name": "openpivot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An agent-driven investigation board over the open web's public record, exposed through WebMCP.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test tests/"
+  },
+  "devDependencies": {
+    "wrangler": "^4.128.0"
+  }
+}
