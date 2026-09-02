@@ -47,7 +47,7 @@ export function evidenceDraftFromReading(caseData, readingId) {
   const reading = caseData.readings.find((item) => item.id === readingId);
   if (!reading) throw new Error("reading not found");
   if (!reading.source_url) throw new Error("reading has no source URL");
-  return { reading_id: reading.id, entity_ids: [reading.entity_id], url: reading.source_url, quote: "", archive: false };
+  return { reading_id: reading.id, entity_ids: [reading.entity_id], url: reading.source_url, quote: "", relevance: "", archive: false };
 }
 
 export function reportSources(caseData) {
@@ -59,4 +59,41 @@ export function reportSources(caseData) {
   for (const reading of caseData.readings) add({ kind: "reading", id: reading.id, url: reading.source_url, label: `${reading.sensor}: ${reading.summary}` });
   for (const evidence of caseData.evidence) add({ kind: "evidence", id: evidence.id, url: evidence.url, label: evidence.quote });
   return [...byUrl.values()];
+}
+
+const METHOD_LABELS = { dns: "DNS", rdap: "RDAP", certs: "Certificate transparency", wayback: "Web archive", urlscan: "URL scan", ip: "IP information", ptr: "Reverse DNS", extract: "Page extraction" };
+
+export function groupInvestigativeLeads(caseData, candidateMap) {
+  const groups = new Map();
+  for (const [parentId] of candidateMap) {
+    const parent = caseData.entities.find((entity) => entity.id === parentId);
+    if (!parent) continue;
+    for (const lead of visibleCandidates(caseData, candidateMap, parentId)) {
+      const reading = caseData.readings.find((item) => item.id === lead.source_reading_id);
+      const method = METHOD_LABELS[reading?.sensor] ?? "Derived lead";
+      const key = `${parentId}:${method}`;
+      if (!groups.has(key)) groups.set(key, { id: key, parent, method, sensor: reading?.sensor ?? null, leads: [] });
+      groups.get(key).leads.push(lead);
+    }
+  }
+  return [...groups.values()];
+}
+
+export function searchCase(caseData, query) {
+  const needle = String(query ?? "").trim().toLowerCase();
+  if (!needle) return [];
+  const results = [];
+  const add = (kind, id, title, context, view, entity_id = null) => {
+    if (`${title} ${context}`.toLowerCase().includes(needle)) results.push({ kind, id, title, context, view, entity_id });
+  };
+  add("case", caseData.id, caseData.title, `${caseData.brief?.objective ?? ""} ${caseData.brief?.scope ?? ""}`, "overview");
+  for (const entity of caseData.entities) add("entity", entity.id, entity.value, `${entity.type} ${entity.notes}`, "entities", entity.id);
+  for (const link of caseData.links) add("relationship", link.id, link.relationship_type ?? "associated_with", link.rationale, "relationships");
+  for (const reading of caseData.readings) add("collection", reading.id, reading.sensor, `${reading.summary} ${reading.source_url ?? ""}`, "entities", reading.entity_id);
+  for (const evidence of caseData.evidence) add("evidence", evidence.id, evidence.url, `${evidence.quote} ${evidence.relevance ?? ""}`, "evidence", evidence.entity_ids?.[0] ?? null);
+  add("findings", "investigator-notes", "Investigator notes", caseData.memo.human, "report");
+  add("findings", "collection-gaps", "Outstanding questions and collection gaps", caseData.memo.gaps ?? "", "report");
+  add("findings", "methodology", "Methodology and handling notes", caseData.memo.methodology ?? "", "report");
+  add("agent-draft", "agent-draft", "Agent draft", caseData.memo.agent, "report");
+  return results.slice(0, 50);
 }

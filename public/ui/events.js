@@ -1,4 +1,4 @@
-import { addEntity, addEvidence, addLink, dismissCandidate, findEntity, removeEntity, restoreCandidate, restoreRemoval, setLinkStatus, setMemo, updateEntityNotes } from "../store.js";
+import { addEntity, addEvidence, addLink, dismissCandidate, findEntity, removeEntity, restoreCandidate, restoreRemoval, setFindingsField, setLinkStatus, setMemo, updateCaseBrief, updateEntityNotes } from "../store.js";
 
 export function createCaseActions({ getCase, persist, setUi, runEntityPivot }) {
   let removalSnapshot = null;
@@ -22,16 +22,18 @@ export function createCaseActions({ getCase, persist, setUi, runEntityPivot }) {
       return result.entity;
     },
     addCandidate(parentId, candidate) {
-      const result = addEntity(getCase(), candidate, "human");
+      const result = addEntity(getCase(), { ...candidate, notes: candidate.notes ?? candidate.why }, "human");
       setUi({ selected: result.entity.id });
       save();
       return result.entity;
     },
     addAndProposeCandidate(parentId, candidate) {
-      const result = addEntity(getCase(), candidate, "human");
+      const result = addEntity(getCase(), { ...candidate, notes: candidate.notes ?? candidate.why }, "human");
       if (result.created) {
         const citations = candidate.source_reading_id ? [{ kind: "reading", id: candidate.source_reading_id }] : [];
-        addLink(getCase(), { from: parentId, to: result.entity.id, rationale: candidate.why || "Candidate discovered from a pivot", citations }, "human", "proposed");
+        const why = String(candidate.why ?? "").toLowerCase();
+        const relationship_type = why.includes("a record") || why.includes("aaaa") ? "resolves_to" : why.includes("nameserver") ? "uses_nameserver" : why.includes("registrar") ? "registered_through" : why.includes("network owner") ? "hosted_on" : why.includes("outbound link") ? "references" : "associated_with";
+        addLink(getCase(), { from: parentId, to: result.entity.id, relationship_type, rationale: candidate.why || "Lead surfaced by collection", citations }, "human", "proposed");
       }
       setUi({ selected: result.entity.id });
       save();
@@ -75,6 +77,27 @@ export function createCaseActions({ getCase, persist, setUi, runEntityPivot }) {
       setMemo(getCase(), "human", text);
       save();
       return getCase().memo.human;
+    },
+    saveCaseBrief(input) {
+      const brief = updateCaseBrief(getCase(), input, "human");
+      save();
+      return brief;
+    },
+    saveFindingsField(field, text) {
+      setFindingsField(getCase(), field, text, "human");
+      save();
+      return getCase().memo[field];
+    },
+    addSelectedLeads(leads) {
+      const added = [];
+      for (const lead of leads) added.push(addEntity(getCase(), { ...lead.candidate, notes: lead.candidate.notes ?? lead.candidate.why }, "human").entity);
+      save();
+      return added;
+    },
+    dismissSelectedLeads(leads) {
+      for (const lead of leads) dismissCandidate(getCase(), lead.key);
+      save();
+      return leads.length;
     },
     removeEntity(id) {
       removalSnapshot = removeEntity(getCase(), id, "human");
@@ -141,5 +164,7 @@ export function resetTransientUi(ui) {
   ui.returnFocus = null;
   ui.focusRelationship = null;
   ui.skipFormRestore = true;
+  if ("searchQuery" in ui) ui.searchQuery = "";
+  if (ui.selectedLeadKeys?.clear) ui.selectedLeadKeys.clear();
   return ui;
 }

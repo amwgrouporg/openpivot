@@ -8,6 +8,7 @@ import { captureFormState, createCaseActions, resetTransientUi, restoreFormState
 import { relationshipFocusFilter, renderRelationships } from "../public/ui/relationships.js";
 import { renderEvidence } from "../public/ui/evidence.js";
 import { renderReport } from "../public/ui/report.js";
+import { renderSearchResults } from "../public/ui/search.js";
 import { newCase } from "../public/store.js";
 
 test("safe links expose http destinations and neutralize executable protocols", () => {
@@ -22,8 +23,9 @@ test("safe links expose http destinations and neutralize executable protocols", 
 });
 
 test("badges always include readable status, actor, and entity text", () => {
-  assert.match(statusBadge("indeterminate"), />indeterminate</);
+  assert.match(statusBadge("indeterminate"), />Collection inconclusive</);
   assert.match(actorBadge("agent"), />agent</);
+  assert.match(actorBadge("human"), />investigator</);
   assert.match(typeBadge("domain"), />domain</);
 });
 
@@ -40,14 +42,14 @@ test("shell exposes five destinations and identifies the active view", () => {
   for (const view of ["overview", "entities", "relationships", "evidence", "report"]) {
     assert.match(html, new RegExp(`data-view-action="${view}"`));
   }
-  for (const label of ["Overview", "Entities", "Relationships", "Evidence", "Report"]) {
+  for (const label of ["Case overview", "Entities", "Relationships", "Evidence", "Findings"]) {
     assert.match(html, new RegExp(`aria-label="${label}"`));
   }
   assert.match(html, /data-view-action="overview"[^>]*aria-current="page"/);
   assert.match(html, /data-main-surface/);
   assert.match(html, /data-workbench/);
   assert.match(html, /data-live-status[^>]*aria-live="polite"/);
-  assert.match(html, /10 site tools ready/);
+  assert.match(html, /10 collection tools available/);
 });
 
 test("shell contains dedicated modal and toast hosts outside main content", () => {
@@ -62,7 +64,7 @@ test("shell contains dedicated modal and toast hosts outside main content", () =
 
   assert.match(html, /data-modal-host/);
   assert.match(html, /data-toast-host/);
-  assert.match(html, /Site tools unavailable/);
+  assert.match(html, /Collection tools unavailable/);
 });
 
 test("overview makes human decisions more prominent than completed activity", () => {
@@ -77,9 +79,11 @@ test("overview makes human decisions more prominent than completed activity", ()
     webmcpState: { available: true, toolNames: Array.from({ length: 10 }, (_, index) => `tool_${index}`) },
   });
 
-  assert.ok(html.indexOf("Needs review") < html.indexOf("Recent pivots"));
+  assert.ok(html.indexOf("Relationships pending review") < html.indexOf("Recent collection activity"));
   assert.match(html, /DNS A record/);
-  assert.match(html, /10 tools connected/);
+  assert.match(html, /10 collection tools available/);
+  assert.match(html, /Review priorities/);
+  assert.match(html, /data-form="case-brief"/);
 });
 
 test("empty overview provides one guided entity starting point", () => {
@@ -87,6 +91,7 @@ test("empty overview provides one guided entity starting point", () => {
   const html = renderOverview({ caseData, queue: [], webmcpState: { available: true, toolNames: Array(10).fill("tool") } });
   assert.match(html, /Start with one selector/);
   assert.match(html, /id="entity-quick-add"/);
+  assert.match(html, /data-form="case-brief"/);
   assert.match(html, /name="type"/);
   assert.match(html, /name="value"/);
 });
@@ -99,6 +104,7 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   const rendered = renderEntities({ caseData, selected, candidates: [{ type: "domain", value: "www.example.com", why: "certificate", source_reading_id: null }], activeRun });
 
   assert.match(rendered.contentHtml, /id="graph"/);
+  assert.match(rendered.contentHtml, /Investigation graph/);
   assert.match(rendered.contentHtml, /data-control="graph-status-filter"/);
   assert.match(rendered.contentHtml, /data-graph-type="domain"/);
   assert.match(rendered.contentHtml, /data-graph-connected/);
@@ -107,7 +113,7 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   assert.match(rendered.workbenchHtml, /data-workbench-title[^>]*tabindex="-1"/);
   assert.match(rendered.workbenchHtml, /data-candidate-key="ent_1:domain:www\.example\.com"/);
   assert.match(rendered.workbenchHtml, /dns/);
-  assert.match(rendered.workbenchHtml, /running/);
+  assert.match(rendered.workbenchHtml, /Collection in progress/);
   assert.match(rendered.workbenchHtml, /data-action="run-pivot"[^>]*disabled/);
   assert.doesNotMatch(rendered.contentHtml, /disabled[^>]*data-view-action/);
 });
@@ -119,7 +125,7 @@ test("entity workbench exposes persistent restoration for dismissed candidates",
   const candidate = { type: "domain", value: "www.example.com", why: "certificate", source_reading_id: "rdg_1" };
   const rendered = renderEntities({ caseData, selected, candidates: [], dismissedCandidates: [candidate], activeRun: null });
 
-  assert.match(rendered.workbenchHtml, /Dismissed candidates/);
+  assert.match(rendered.workbenchHtml, /Dismissed leads/);
   assert.match(rendered.workbenchHtml, /www\.example\.com/);
   assert.match(rendered.workbenchHtml, /data-action="restore-candidate"/);
 });
@@ -149,11 +155,12 @@ test("proposed relationship card exposes rationale, citation, and both review ch
     { id: "ent_2", type: "ip", value: "192.0.2.1", notes: "", added_by: "agent", added_at: "2026-09-01T10:01:00.000Z" },
   ];
   caseData.readings = [{ id: "rdg_1", entity_id: "ent_1", sensor: "dns", status: "ok", summary: "A 192.0.2.1", source_url: "https://cloudflare-dns.com/dns-query?name=example.com", fetched_at: "2026-09-01T10:02:00.000Z", requested_by: "agent", raw: {}, untrusted: true }];
-  caseData.links = [{ id: "lnk_1", from: "ent_1", to: "ent_2", rationale: "DNS A record", asserted_by: "agent", status: "proposed", at: "2026-09-01T10:03:00.000Z", citations: [{ kind: "reading", id: "rdg_1" }] }];
+  caseData.links = [{ id: "lnk_1", from: "ent_1", to: "ent_2", relationship_type: "resolves_to", rationale: "DNS A record", asserted_by: "agent", status: "proposed", at: "2026-09-01T10:03:00.000Z", citations: [{ kind: "reading", id: "rdg_1" }] }];
 
   const html = renderRelationships({ caseData, statusFilter: "all" });
 
   assert.match(html, /DNS A record/);
+  assert.match(html, /resolves to/);
   assert.match(html, /cloudflare-dns\.com/);
   assert.match(html, /data-action="accept-relationship"/);
   assert.match(html, /data-action="reject-relationship"/);
@@ -177,13 +184,14 @@ test("evidence draft prefills provenance while leaving the exact quote empty", (
 
 test("evidence renders submitted archive state and an explicit untrusted label", () => {
   const caseData = newCase("Archive state");
-  caseData.evidence.push({ id: "evd_1", entity_ids: [], url: "https://example.com/source", quote: "Quoted source text", captured_at: "2026-09-01T10:00:00.000Z", archived_url: null, archive_status: "pending", archive_check_url: "https://web.archive.org/web/*/https://example.com/source", added_by: "agent", untrusted: true, reading_id: null });
+  caseData.evidence.push({ id: "evd_1", entity_ids: [], url: "https://example.com/source", quote: "Quoted source text", relevance: "Supports the observed DNS relationship", captured_at: "2026-09-01T10:00:00.000Z", archived_url: null, archive_status: "pending", archive_check_url: "https://web.archive.org/web/*/https://example.com/source", added_by: "agent", untrusted: true, reading_id: null });
 
   const html = renderEvidence({ caseData, draft: null });
 
-  assert.match(html, /Archive request sent; confirmation pending/);
+  assert.match(html, /Archive request submitted; capture not confirmed/);
   assert.match(html, /web\.archive\.org/);
-  assert.match(html, /Untrusted source material/);
+  assert.match(html, /Source excerpt — untrusted external content/);
+  assert.match(html, /Supports the observed DNS relationship/);
 });
 
 test("report keeps analyst editing separate from the agent draft and sources", () => {
@@ -194,9 +202,32 @@ test("report keeps analyst editing separate from the agent draft and sources", (
   const html = renderReport({ caseData });
 
   assert.match(html, /id="memo-human"/);
-  assert.match(html, /Unreviewed agent draft/);
+  assert.match(html, /Agent draft — requires validation/);
   assert.match(html, /Agent finding/);
+  assert.match(html, /Outstanding questions and collection gaps/);
+  assert.match(html, /Methodology and handling notes/);
   assert.match(html, /example\.com\/source/);
+});
+
+test("case search renders typed local results", () => {
+  const html = renderSearchResults("example", [{ kind: "entity", id: "ent_1", title: "example.com", context: "domain", view: "entities", entity_id: "ent_1" }]);
+  assert.match(html, /Case search results/);
+  assert.match(html, /data-action="search-result"/);
+  assert.match(html, /example\.com/);
+  assert.match(html, /data-view="entities"/);
+});
+
+test("primary cyber investigation views avoid unsupported verification claims", () => {
+  const caseData = newCase("Language check");
+  caseData.entities.push({ id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
+  const rendered = [
+    renderOverview({ caseData, queue: [], webmcpState: { available: true, toolNames: [] } }),
+    renderEntities({ caseData, selected: caseData.entities[0], candidates: [], activeRun: null }).contentHtml,
+    renderRelationships({ caseData }),
+    renderEvidence({ caseData }),
+    renderReport({ caseData }),
+  ].join(" ");
+  assert.doesNotMatch(rendered, /\bverified\b|\btrusted\b|\bproven\b/i);
 });
 
 test("case actions attach evidence and save only the analyst memo", () => {
@@ -212,6 +243,36 @@ test("case actions attach evidence and save only the analyst memo", () => {
   assert.equal(caseData.evidence[0].reading_id, "rdg_1");
   assert.equal(caseData.memo.human, "Analyst conclusion");
   assert.equal(caseData.memo.agent, "");
+});
+
+test("case actions save investigation framing and structured findings", () => {
+  const caseData = newCase("Framing");
+  const actions = createCaseActions({ getCase: () => caseData, persist() {}, setUi() {}, runEntityPivot: async () => ({}) });
+
+  actions.saveCaseBrief({ objective: "Identify infrastructure used by the campaign", scope: "Domains observed during the incident window", status: "active" });
+  actions.saveFindingsField("gaps", "Historical hosting data is incomplete");
+  actions.saveFindingsField("methodology", "DNS, RDAP, CT, URL scan and archive collection");
+
+  assert.equal(caseData.brief.objective, "Identify infrastructure used by the campaign");
+  assert.equal(caseData.memo.gaps, "Historical hosting data is incomplete");
+  assert.equal(caseData.memo.methodology, "DNS, RDAP, CT, URL scan and archive collection");
+});
+
+test("batch lead actions add or dismiss without asserting relationships", () => {
+  const caseData = newCase("Batch leads");
+  caseData.entities.push({ id: "ent_parent", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
+  const actions = createCaseActions({ getCase: () => caseData, persist() {}, setUi() {}, runEntityPivot: async () => ({}) });
+  const leads = [
+    { parentId: "ent_parent", candidate: { type: "domain", value: "www.example.com", why: "certificate", source_reading_id: null }, key: "ent_parent:domain:www.example.com" },
+    { parentId: "ent_parent", candidate: { type: "ip", value: "192.0.2.9", why: "A record", source_reading_id: null }, key: "ent_parent:ip:192.0.2.9" },
+  ];
+
+  actions.addSelectedLeads(leads);
+  assert.equal(caseData.entities.length, 3);
+  assert.equal(caseData.links.length, 0);
+
+  actions.dismissSelectedLeads(leads);
+  assert.deepEqual(caseData.ui.dismissed_candidates.sort(), leads.map((lead) => lead.key).sort());
 });
 
 test("a later mutation invalidates entity-removal undo", () => {

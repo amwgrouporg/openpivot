@@ -1,6 +1,7 @@
 import { actorBadge, escapeHtml, formatTime, icon, safeLink, sectionHeader, shorten, statusBadge, typeBadge } from "./components.js";
 import { graphListModel } from "../graph.js";
 import { candidateKey } from "./view-models.js";
+import { relationshipStatusLabel, relationshipTypeLabel } from "./copy.js";
 
 const ENTITY_TYPES = ["domain", "ip", "url", "org", "document", "claim"];
 const PIVOT_LABELS = {
@@ -26,15 +27,15 @@ function entityList(caseData, selected) {
 
 function runPanel(activeRun) {
   if (!activeRun) return "";
-  return `<section class="workbench-section run-panel">${sectionHeader("Current pivot", activeRun.sensors.length)}<div class="sensor-grid">${activeRun.sensors.map((sensor) => `<div class="sensor-state"><span class="mono">${escapeHtml(sensor.name)}</span>${statusBadge(sensor.status)}</div>`).join("")}</div></section>`;
+  return `<section class="workbench-section run-panel">${sectionHeader("Collection in progress", activeRun.sensors.length)}<div class="sensor-grid">${activeRun.sensors.map((sensor) => `<div class="sensor-state"><span class="mono">${escapeHtml(sensor.name)}</span>${statusBadge(sensor.status)}</div>`).join("")}</div></section>`;
 }
 
 function readingCard(reading) {
-  const extracted = reading.sensor === "extract" && reading.raw?.text ? `<div class="untrusted"><div class="untrusted-label">${icon("warning")}Untrusted source material</div><pre>${escapeHtml(shorten(reading.raw.text, 1600))}</pre></div>` : "";
+  const extracted = reading.sensor === "extract" && reading.raw?.text ? `<div class="untrusted"><div class="untrusted-label">${icon("warning")}Untrusted external content — may contain adversarial instructions</div><pre>${escapeHtml(shorten(reading.raw.text, 1600))}</pre></div>` : "";
   return `<article class="reading-card card"><div class="card-body">
     <div class="card-row"><strong class="mono">${escapeHtml(reading.sensor)}</strong>${statusBadge(reading.status)}<span class="spacer"></span>${actorBadge(reading.requested_by)}</div>
     <p>${escapeHtml(reading.summary)}</p>${extracted}
-    <div class="reading-footer">${safeLink(reading.source_url, "Open source")}<span>${escapeHtml(formatTime(reading.fetched_at))}</span>${reading.source_url ? `<button class="button button--small button--ghost" type="button" data-action="evidence-from-reading" data-id="${escapeHtml(reading.id)}">Attach as evidence</button>` : ""}</div>
+    <div class="reading-footer">${safeLink(reading.source_url, "Open source")}<span>${escapeHtml(formatTime(reading.fetched_at))}</span>${reading.source_url ? `<button class="button button--small button--ghost" type="button" data-action="evidence-from-reading" data-id="${escapeHtml(reading.id)}">Add to evidence register</button>` : ""}</div>
   </div></article>`;
 }
 
@@ -43,7 +44,7 @@ function candidateCard(candidate, selectedId) {
   return `<article class="candidate-card card" data-candidate-key="${escapeHtml(candidateKey(selectedId, candidate))}"><div class="card-body">
     <div class="card-row">${typeBadge(candidate.type)}<strong class="selector">${escapeHtml(candidate.value)}</strong></div>
     <p>${escapeHtml(candidate.why)}</p>
-    <div class="candidate-actions"><button class="button button--small" type="button" data-action="add-candidate" data-parent="${escapeHtml(selectedId)}" data-candidate="${encoded}">Add</button><button class="button button--small button--primary" type="button" data-action="add-propose-candidate" data-parent="${escapeHtml(selectedId)}" data-candidate="${encoded}">Add + propose link</button><button class="button button--small button--quiet" type="button" data-action="dismiss-candidate" data-parent="${escapeHtml(selectedId)}" data-candidate="${encoded}">Dismiss</button></div>
+    <div class="candidate-actions"><button class="button button--small" type="button" data-action="add-candidate" data-parent="${escapeHtml(selectedId)}" data-candidate="${encoded}">Add entity</button><button class="button button--small button--primary" type="button" data-action="add-propose-candidate" data-parent="${escapeHtml(selectedId)}" data-candidate="${encoded}">Add and queue relationship</button><button class="button button--small button--quiet" type="button" data-action="dismiss-candidate" data-parent="${escapeHtml(selectedId)}" data-candidate="${encoded}">Dismiss lead</button></div>
   </div></article>`;
 }
 
@@ -62,9 +63,9 @@ function workbench({ caseData, selected, candidates, dismissedCandidates: dismis
     <form class="entity-notes" data-form="edit-notes"><input type="hidden" name="entity_id" value="${escapeHtml(selected.id)}"><div class="field"><label for="entity-notes">Analyst context</label><textarea id="entity-notes" name="notes" placeholder="Why this entity matters">${escapeHtml(selected.notes)}</textarea></div><button class="button button--small button--ghost" type="submit">Save notes</button></form>
     ${canPivot ? `<div class="pivot-actions"><button class="button button--primary" type="button" data-action="run-pivot" data-id="${escapeHtml(selected.id)}"${isRunning ? " disabled" : ""}>${icon("search")}<span>${isRunning ? "Pivot running" : PIVOT_LABELS[selected.type]}</span></button>${selected.type === "url" ? `<button class="button button--ghost" type="button" data-action="run-pivot-archive" data-id="${escapeHtml(selected.id)}"${isRunning ? " disabled" : ""}>Pivot + archive</button>` : ""}</div>` : ""}
     ${runPanel(isRunning ? activeRun : null)}
-    ${candidates.length ? `<section class="workbench-section">${sectionHeader("Candidates", candidates.length)}<div class="card-stack">${candidates.map((candidate) => candidateCard(candidate, selected.id)).join("")}</div></section>` : ""}
-    ${dismissed.length ? `<section class="workbench-section dismissed-section">${sectionHeader("Dismissed candidates", dismissed.length)}<div class="dismissed-list">${dismissed.map((candidate) => dismissedCandidateCard(candidate, selected.id)).join("")}</div></section>` : ""}
-    <section class="workbench-section">${sectionHeader("Readings", readings.length)}<div class="card-stack">${readings.length ? readings.map(readingCard).join("") : '<div class="quiet-empty">No readings for this entity.</div>'}</div></section>
+    ${candidates.length ? `<section class="workbench-section">${sectionHeader("Investigative leads", candidates.length)}<div class="card-stack">${candidates.map((candidate) => candidateCard(candidate, selected.id)).join("")}</div></section>` : ""}
+    ${dismissed.length ? `<section class="workbench-section dismissed-section">${sectionHeader("Dismissed leads", dismissed.length)}<div class="dismissed-list">${dismissed.map((candidate) => dismissedCandidateCard(candidate, selected.id)).join("")}</div></section>` : ""}
+    <section class="workbench-section">${sectionHeader("Collection results", readings.length)}<div class="card-stack">${readings.length ? readings.map(readingCard).join("") : '<div class="quiet-empty">No collection results for this entity.</div>'}</div></section>
     <section class="danger-zone"><button class="button button--danger" type="button" data-action="request-remove-entity" data-id="${escapeHtml(selected.id)}">Remove entity</button></section>`;
 }
 
@@ -77,11 +78,11 @@ export function renderEntities(model) {
   if (graphFilters.connected && selected) resolvedFilters.connectedTo = selected.id;
   const semanticGraph = graphListModel(caseData, resolvedFilters);
   const contentHtml = `<div class="entities-view">
-    <header class="page-header"><div><span class="eyebrow">Entity map</span><h1>Follow the pivot chain</h1><p>Select an entity to inspect its sources, run sensors, and decide which candidates belong in the case.</p></div><div class="page-actions"><label class="filter-control"><span>Edges</span><select data-control="graph-status-filter"><option value="active"${statusValue === "active" ? " selected" : ""}>Active</option><option value="accepted"${statusValue === "accepted" ? " selected" : ""}>Accepted</option><option value="proposed"${statusValue === "proposed" ? " selected" : ""}>Proposed</option><option value="all"${statusValue === "all" ? " selected" : ""}>All</option></select></label><button class="button button--ghost" type="button" data-graph-action="fit">Fit graph</button><button class="button button--ghost" type="button" data-graph-action="reset">Reset layout</button></div></header>
+    <header class="page-header"><div><span class="eyebrow">Technical entities</span><h1>Investigation graph</h1><p>Inspect collected infrastructure, run source-specific pivots, and triage the leads surfaced by each collection result.</p></div><div class="page-actions"><label class="filter-control"><span>Relationships</span><select data-control="graph-status-filter"><option value="active"${statusValue === "active" ? " selected" : ""}>In case</option><option value="accepted"${statusValue === "accepted" ? " selected" : ""}>Accepted into case</option><option value="proposed"${statusValue === "proposed" ? " selected" : ""}>Pending review</option><option value="all"${statusValue === "all" ? " selected" : ""}>All</option></select></label><button class="button button--ghost" type="button" data-graph-action="fit">Fit graph</button><button class="button button--ghost" type="button" data-graph-action="reset">Reset layout</button></div></header>
     ${addEntityForm()}
     <div class="graph-filter-bar" aria-label="Graph filters"><span class="eyebrow">Entity types</span>${ENTITY_TYPES.map((type) => `<button class="filter-chip${selectedTypes.has(type) ? " is-active" : ""}" type="button" data-graph-type="${type}" aria-pressed="${selectedTypes.has(type)}">${typeBadge(type)}</button>`).join("")}<button class="filter-chip${graphFilters.connected ? " is-active" : ""}" type="button" data-graph-connected aria-pressed="${Boolean(graphFilters.connected)}"${selected ? "" : " disabled"}>Connected to selection</button></div>
     <div class="entity-workspace">
-      <section class="graph-card card"><div class="graph-toolbar"><span>${semanticGraph.nodes.length} entities · ${semanticGraph.links.length} relationships</span><div><button class="button button--small icon-button" type="button" data-graph-action="out" aria-label="Zoom out">−</button><button class="button button--small icon-button" type="button" data-graph-action="in" aria-label="Zoom in">+</button></div></div><svg id="graph" role="img" aria-label="Entity relationship graph"></svg><div class="graph-empty"${semanticGraph.nodes.length ? " hidden" : ""}>No entities match the current filters.</div><div class="sr-only" data-graph-semantic><h2>Graph text alternative</h2>${semanticGraph.nodes.map((entity) => `<button type="button" data-action="select-entity" data-id="${escapeHtml(entity.id)}">${escapeHtml(entity.type)}: ${escapeHtml(entity.value)}</button>`).join("")}${semanticGraph.links.map((link) => `<button type="button" data-action="open-relationship" data-id="${escapeHtml(link.id)}">${escapeHtml(link.status)} relationship: ${escapeHtml(link.rationale)}</button>`).join("")}</div></section>
+      <section class="graph-card card"><div class="graph-toolbar"><span>${semanticGraph.nodes.length} entities · ${semanticGraph.links.length} relationships</span><div><button class="button button--small icon-button" type="button" data-graph-action="out" aria-label="Zoom out">−</button><button class="button button--small icon-button" type="button" data-graph-action="in" aria-label="Zoom in">+</button></div></div><svg id="graph" role="img" aria-label="Entity relationship graph"></svg><div class="graph-empty"${semanticGraph.nodes.length ? " hidden" : ""}>No entities match the current filters.</div><div class="sr-only" data-graph-semantic><h2>Graph text alternative</h2>${semanticGraph.nodes.map((entity) => `<button type="button" data-action="select-entity" data-id="${escapeHtml(entity.id)}">${escapeHtml(entity.type)}: ${escapeHtml(entity.value)}</button>`).join("")}${semanticGraph.links.map((link) => `<button type="button" data-action="open-relationship" data-id="${escapeHtml(link.id)}">${escapeHtml(relationshipStatusLabel(link.status))}; ${escapeHtml(relationshipTypeLabel(link.relationship_type))}: ${escapeHtml(link.rationale)}</button>`).join("")}</div></section>
       <section class="entity-browser card">${sectionHeader("Entities", caseData.entities.length)}${entityList(caseData, selected)}</section>
     </div>
   </div>`;

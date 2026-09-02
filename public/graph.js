@@ -1,6 +1,7 @@
 // D3 graph with a pure model boundary. The pure model keeps filtering and persisted
 // positions testable even when D3 is unavailable.
 const COLORS = { domain: "#6ea8fe", ip: "#f2bd4a", url: "#59d48b", org: "#bd91ff", document: "#9aa7b7", claim: "#ff7b72" };
+import { relationshipStatusLabel, relationshipTypeLabel } from "./ui/copy.js";
 
 export function mergeGraphPositions(current, visible, { replace = false } = {}) {
   return replace ? { ...visible } : { ...(current ?? {}), ...(visible ?? {}) };
@@ -101,11 +102,11 @@ export function createGraph(svgEl, options = {}) {
       .on("keydown", (event, item) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectedLinkId = item.id; onSelectLink(item.id); } });
     linkEnter.append("title");
     const allLinks = linkEnter.merge(link)
-      .attr("aria-label", (item) => `${item.status} relationship: ${item.rationale}`)
+      .attr("aria-label", (item) => `${relationshipStatusLabel(item.status)}; ${relationshipTypeLabel(item.relationship_type)}; ${item.rationale}`)
       .attr("stroke", (item) => item.status === "accepted" ? "#597897" : "#c69843")
       .attr("stroke-width", (item) => item.id === selectedLinkId ? 3 : item.status === "accepted" ? 1.8 : 1.6)
       .attr("stroke-dasharray", (item) => item.status === "proposed" ? "6,5" : null);
-    allLinks.select("title").text((item) => `${item.status}: ${item.rationale}`);
+    allLinks.select("title").text((item) => `${relationshipStatusLabel(item.status)} · ${relationshipTypeLabel(item.relationship_type)}: ${item.rationale}`);
 
     const node = nodeLayer.selectAll("g.graph-node").data(nodes, (item) => item.id);
     node.exit().remove();

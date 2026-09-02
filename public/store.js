@@ -4,6 +4,7 @@ import { CASE_KEY_V1, CASE_KEY_V2, createEmptyCase, createLocalCaseRepository } 
 export const ENTITY_TYPES = ["domain", "ip", "url", "org", "document", "claim"];
 export const LINK_STATUS = ["proposed", "accepted", "rejected"];
 export const ACTORS = ["human", "agent"];
+export const RELATIONSHIP_TYPES = ["resolves_to", "uses_nameserver", "registered_through", "hosted_on", "redirects_to", "references", "observed_with", "associated_with", "custom"];
 
 export function uid(prefix) {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
@@ -117,6 +118,21 @@ export function updateEntityNotes(c, id, notes, actor) {
   return entity;
 }
 
+export function updateCaseBrief(c, { objective, scope, status }, actor) {
+  assertActor(actor);
+  if (!["active", "on_hold", "closed"].includes(status)) throw new Error("invalid case status");
+  c.brief = { objective: String(objective ?? "").trim().slice(0, 4000), scope: String(scope ?? "").trim().slice(0, 4000), status, updated_at: new Date().toISOString() };
+  log(c, actor, "update_case_brief", status);
+  return c.brief;
+}
+
+export function setFindingsField(c, field, text, actor) {
+  assertActor(actor);
+  if (!['human', 'gaps', 'methodology'].includes(field)) throw new Error("invalid findings field");
+  c.memo[field] = String(text ?? "").slice(0, 20000);
+  log(c, actor, "write_findings", `${field} ${c.memo[field].length} chars`);
+}
+
 export function addCompletedRun(c, run) {
   if (!run?.completed_at) throw new Error("only completed runs can be stored");
   c.runs ??= [];
@@ -185,11 +201,12 @@ export function restoreRemoval(c, snapshot) {
   log(c, snapshot.actor, "restore_entity", snapshot.entity.id);
 }
 
-export function addLink(c, { from, to, rationale, citations = [] }, actor, status = "proposed") {
+export function addLink(c, { from, to, rationale, relationship_type = "associated_with", citations = [] }, actor, status = "proposed") {
   assertActor(actor);
   if (!LINK_STATUS.includes(status)) throw new Error(`link status outside vocabulary: ${status}`);
   if (!findEntity(c, from) || !findEntity(c, to)) throw new Error("both entities must exist");
   if (from === to) throw new Error("cannot link an entity to itself");
+  if (!RELATIONSHIP_TYPES.includes(relationship_type)) throw new Error("relationship type outside vocabulary");
   const dup = c.links.find((l) => (l.from === from && l.to === to) || (l.from === to && l.to === from));
   if (dup) return { link: dup, created: false };
   const checkedCitations = citations.map((citation) => {
@@ -200,7 +217,7 @@ export function addLink(c, { from, to, rationale, citations = [] }, actor, statu
     if (!exists) throw new Error(`citation not found: ${citation.id}`);
     return { kind: citation.kind, id: citation.id };
   });
-  const link = { id: uid("lnk"), from, to, rationale: String(rationale ?? "").slice(0, 1000), citations: checkedCitations, asserted_by: actor, status, at: new Date().toISOString() };
+  const link = { id: uid("lnk"), from, to, relationship_type, rationale: String(rationale ?? "").slice(0, 1000), citations: checkedCitations, asserted_by: actor, status, at: new Date().toISOString() };
   c.links.push(link);
   log(c, actor, "link_entities", `${findEntity(c, from).value} -> ${findEntity(c, to).value} (${status})`);
   return { link, created: true };
@@ -218,7 +235,7 @@ export function setLinkStatus(c, id, status, actor) {
   return link;
 }
 
-export function addEvidence(c, { entity_ids, url, quote, archived_url, reading_id = null, archive_status, archive_check_url = null }, actor) {
+export function addEvidence(c, { entity_ids, url, quote, relevance = "", archived_url, reading_id = null, archive_status, archive_check_url = null }, actor) {
   assertActor(actor);
   const ids = (Array.isArray(entity_ids) ? entity_ids : []).filter((id) => findEntity(c, id));
   if (reading_id && !c.readings.some((reading) => reading.id === reading_id)) throw new Error("reading not found");
@@ -226,7 +243,7 @@ export function addEvidence(c, { entity_ids, url, quote, archived_url, reading_i
   if (!evidenceQuote) throw new Error("an exact evidence quote is required");
   const resolvedArchiveStatus = archive_status ?? (archived_url ? "confirmed" : "not_requested");
   if (!["not_requested", "pending", "confirmed"].includes(resolvedArchiveStatus)) throw new Error("invalid archive status");
-  const ev = { id: uid("evd"), entity_ids: ids, url: String(url ?? "").trim().slice(0, 2048), quote: evidenceQuote, captured_at: new Date().toISOString(), archived_url: archived_url ?? null, archive_status: resolvedArchiveStatus, archive_check_url: archive_check_url ?? null, added_by: actor, untrusted: true, reading_id };
+  const ev = { id: uid("evd"), entity_ids: ids, url: String(url ?? "").trim().slice(0, 2048), quote: evidenceQuote, relevance: String(relevance ?? "").trim().slice(0, 4000), captured_at: new Date().toISOString(), archived_url: archived_url ?? null, archive_status: resolvedArchiveStatus, archive_check_url: archive_check_url ?? null, added_by: actor, untrusted: true, reading_id };
   if (!isHttpUrl(ev.url)) throw new Error("url must be http(s)");
   if (ev.archived_url && !isHttpUrl(ev.archived_url)) ev.archived_url = null;
   c.evidence.push(ev);
@@ -366,15 +383,20 @@ function markdownLiteralBlock(value) {
   return `${fence}text\n${text}\n${fence}`;
 }
 
+function relationshipTypeText(type) {
+  return ({ resolves_to: "resolves to", uses_nameserver: "uses nameserver", registered_through: "registered through", hosted_on: "hosted on", redirects_to: "redirects to", references: "references", observed_with: "observed with", associated_with: "associated with", custom: "custom relationship" })[type] ?? "associated with";
+}
+
 export function exportMarkdown(c) {
   const e = (id) => findEntity(c, id);
   const lines = [];
   lines.push(`# ${markdownText(c.title)}`, "", `Case ${markdownText(c.id)}. Created ${markdownText(c.created_at)}. Exported ${new Date().toISOString()}.`, "");
+  lines.push("## Investigation definition", "", `- **Objective:** ${markdownText(c.brief?.objective || "Not recorded")}`, `- **Scope and constraints:** ${markdownText(c.brief?.scope || "Not recorded")}`, `- **Case status:** ${markdownText((c.brief?.status ?? "active").replace("_", " "))}`, "");
   lines.push("## Entities", "");
   for (const x of c.entities) lines.push(`- **${markdownText(x.type)}** ${markdownText(x.value)} (added by ${markdownText(x.added_by)}, ${markdownText(x.added_at)})${x.notes ? ` -- ${markdownText(x.notes.replace(/\n/g, " "))}` : ""}`);
-  lines.push("", "## Links", "");
+  lines.push("", "## Technical relationships", "");
   for (const l of c.links.filter((l) => l.status !== "rejected")) {
-    lines.push(`- ${markdownText(e(l.from)?.value ?? l.from)} → ${markdownText(e(l.to)?.value ?? l.to)} [${markdownText(l.status)}, asserted by ${markdownText(l.asserted_by)}]: ${markdownText(l.rationale)}`);
+    lines.push(`- ${markdownText(e(l.from)?.value ?? l.from)} **${markdownText(relationshipTypeText(l.relationship_type))}** ${markdownText(e(l.to)?.value ?? l.to)} [${markdownText(l.status)}, asserted by ${markdownText(l.asserted_by)}]: ${markdownText(l.rationale)}`);
     const sources = (l.citations ?? []).map((citation) => citation.kind === "reading"
       ? c.readings.find((reading) => reading.id === citation.id)?.source_url
       : c.evidence.find((evidence) => evidence.id === citation.id)?.url).filter(Boolean);
@@ -383,14 +405,14 @@ export function exportMarkdown(c) {
   const rejected = c.links.filter((l) => l.status === "rejected");
   if (rejected.length) {
     lines.push("", "### Rejected links", "");
-    for (const l of rejected) lines.push(`- ${markdownText(e(l.from)?.value ?? l.from)} → ${markdownText(e(l.to)?.value ?? l.to)} (proposed by ${markdownText(l.asserted_by)}, rejected by ${markdownText(l.reviewed_by)}): ${markdownText(l.rationale)}`);
+    for (const l of rejected) lines.push(`- ${markdownText(e(l.from)?.value ?? l.from)} **${markdownText(relationshipTypeText(l.relationship_type))}** ${markdownText(e(l.to)?.value ?? l.to)} (proposed by ${markdownText(l.asserted_by)}, rejected by ${markdownText(l.reviewed_by)}): ${markdownText(l.rationale)}`);
   }
-  lines.push("", "## Evidence", "");
-  for (const v of c.evidence) lines.push(`- ${markdownUrl(v.url)}${v.archived_url ? ` (archived: ${markdownUrl(v.archived_url)})` : ""} -- captured ${markdownText(v.captured_at)} by ${markdownText(v.added_by)}; entities: ${v.entity_ids.map((id) => markdownText(e(id)?.value ?? id)).join(", ") || "none"}`, "", markdownLiteralBlock(v.quote));
-  lines.push("", "## Sensor readings", "");
+  lines.push("", "## Evidence register", "");
+  for (const v of c.evidence) lines.push(`- ${markdownUrl(v.url)}${v.archived_url ? ` (archived: ${markdownUrl(v.archived_url)})` : ""} -- captured ${markdownText(v.captured_at)} by ${markdownText(v.added_by)}; entities: ${v.entity_ids.map((id) => markdownText(e(id)?.value ?? id)).join(", ") || "none"}`, "", "  **Relevance to investigation:** " + markdownText(v.relevance || "Not recorded"), "", markdownLiteralBlock(v.quote));
+  lines.push("", "## Collection results", "");
   for (const r of c.readings) lines.push(`- ${markdownText(e(r.entity_id)?.value ?? r.entity_id)} / ${markdownText(r.sensor)} [${markdownText(r.status)}] ${markdownText(r.fetched_at)}: ${markdownText(r.summary)}${r.source_url ? ` <${markdownUrl(r.source_url)}>` : ""}`);
-  lines.push("", "## Findings memo", "", "### Analyst", "", markdownBody(c.memo.human) || "(empty)", "", `### Agent${c.memo.agent_updated_at ? ` (updated ${markdownText(c.memo.agent_updated_at)})` : ""}`, "", markdownBody(c.memo.agent) || "(empty)", "");
-  lines.push("## Log", "");
+  lines.push("", "## Findings", "", "### Investigator notes", "", markdownBody(c.memo.human) || "(empty)", "", "### Outstanding questions and collection gaps", "", markdownBody(c.memo.gaps) || "(empty)", "", "### Methodology and handling notes", "", markdownBody(c.memo.methodology) || "(empty)", "", `### Agent draft — requires validation${c.memo.agent_updated_at ? ` (updated ${markdownText(c.memo.agent_updated_at)})` : ""}`, "", markdownBody(c.memo.agent) || "(empty)", "");
+  lines.push("## Audit trail", "");
   for (const l of c.log.slice(0, 100)) lines.push(`- ${markdownText(l.ts)} ${markdownText(l.actor)} ${markdownText(l.action)}: ${markdownText(l.detail)}`);
   return lines.join("\n");
 }

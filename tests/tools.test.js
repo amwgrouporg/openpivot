@@ -75,6 +75,23 @@ test("legacy link input still creates a proposed relationship", async () => {
 
   assert.equal(result.link.status, "proposed");
   assert.deepEqual(result.link.citations, []);
+  assert.equal(result.link.relationship_type, "associated_with");
+});
+
+test("tools accept optional technical relationship type and evidence relevance", async () => {
+  const caseData = newCase("Cyber semantics");
+  caseData.entities = [
+    { id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" },
+    { id: "ent_2", type: "ip", value: "192.0.2.1", notes: "", added_by: "human", added_at: "2026-09-01T10:01:00.000Z" },
+  ];
+  const { registry, toolset } = harness(caseData);
+  await toolset.registerStaticTools();
+
+  const relationship = await registry.tools.get("link_entities").execute({ from_id: "ent_1", to_id: "ent_2", rationale: "DNS A response", relationship_type: "resolves_to" });
+  const evidence = await registry.tools.get("attach_evidence").execute({ entity_ids: ["ent_1"], url: "https://example.com/source", quote: "A 192.0.2.1", relevance: "Supports the observed resolution" });
+
+  assert.equal(relationship.link.relationship_type, "resolves_to");
+  assert.equal(evidence.evidence.relevance, "Supports the observed resolution");
 });
 
 test("legacy evidence input remains valid", async () => {

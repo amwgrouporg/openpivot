@@ -49,6 +49,9 @@ test("v1 migration copies records and initializes cockpit state", () => {
     dismissed_candidates: [],
   });
   assert.deepEqual(migrated.runs, []);
+  assert.deepEqual(migrated.brief, { objective: "", scope: "", status: "active", updated_at: before.created_at });
+  assert.equal(migrated.memo.gaps, "");
+  assert.equal(migrated.memo.methodology, "");
   assert.equal(before.version, 1);
   assert.equal(before.ui, undefined);
 });
@@ -179,4 +182,10 @@ test("completed runs are appended while active runs are refused", () => {
   addCompletedRun(caseData, complete);
   assert.deepEqual(caseData.runs, [complete]);
   assert.throws(() => addCompletedRun(caseData, { ...complete, id: "run_2", completed_at: null }), /completed/i);
+});
+
+test("new cyber investigation cases include brief and findings fields", () => {
+  const caseData = newCase("Cyber case");
+  assert.deepEqual(caseData.brief, { objective: "", scope: "", status: "active", updated_at: caseData.created_at });
+  assert.deepEqual(caseData.memo, { human: "", gaps: "", methodology: "", agent: "", agent_updated_at: null });
 });

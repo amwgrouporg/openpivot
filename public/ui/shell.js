@@ -1,12 +1,7 @@
 import { escapeHtml, icon } from "./components.js";
+import { COPY } from "./copy.js";
 
-export const PRIMARY_VIEWS = [
-  { id: "overview", label: "Overview", icon: "overview" },
-  { id: "entities", label: "Entities", icon: "entities" },
-  { id: "relationships", label: "Relationships", icon: "relationships" },
-  { id: "evidence", label: "Evidence", icon: "evidence" },
-  { id: "report", label: "Report", icon: "report" },
-];
+export const PRIMARY_VIEWS = COPY.navigation;
 
 function navigation(activeView, counts, className) {
   return `<nav class="${className}" aria-label="Case navigation" data-primary-nav>${PRIMARY_VIEWS.map((view) => {
@@ -16,11 +11,11 @@ function navigation(activeView, counts, className) {
   }).join("")}</nav>`;
 }
 
-export function renderShell({ caseData, activeView, counts = {}, webmcpState, contentHtml, workbenchHtml = "", noticeHtml = "" }) {
+export function renderShell({ caseData, activeView, counts = {}, webmcpState, contentHtml, workbenchHtml = "", noticeHtml = "", searchQuery = "", searchResultsHtml = "" }) {
   const tools = webmcpState?.toolNames ?? [];
   const siteStatus = webmcpState?.available
-    ? `<span class="connection-dot is-ready"></span><strong>${tools.length} site tools ready</strong><span class="connection-detail">WebMCP connected</span>`
-    : `<span class="connection-dot"></span><strong>Site tools unavailable</strong><span class="connection-detail">Open in the ChatGPT desktop browser</span>`;
+    ? `<span class="connection-dot is-ready"></span><strong>${tools.length} collection tools available</strong><span class="connection-detail">WebMCP connected</span>`
+    : `<span class="connection-dot"></span><strong>Collection tools unavailable</strong><span class="connection-detail">Open in the ChatGPT desktop browser</span>`;
   const accepted = caseData.links?.filter((link) => link.status === "accepted").length ?? 0;
   const pending = caseData.links?.filter((link) => link.status === "proposed").length ?? 0;
 
@@ -28,22 +23,23 @@ export function renderShell({ caseData, activeView, counts = {}, webmcpState, co
     <header class="topbar">
       <a class="brand" href="#overview" data-view-action="overview" aria-label="OpenPivot overview"><span class="brand-mark">OP</span><span class="brand-name">OpenPivot</span></a>
       <div class="case-identity">
-        <span class="eyebrow">Active case</span>
+        <span class="eyebrow">Cyber investigation</span>
         <input id="case-title" class="case-title" type="text" value="${escapeHtml(caseData.title)}" aria-label="Case title" spellcheck="false">
       </div>
-      <div class="topbar-stats" aria-label="Case totals"><span><strong>${caseData.entities?.length ?? 0}</strong> entities</span><span><strong>${accepted}</strong> accepted</span>${pending ? `<span class="attention"><strong>${pending}</strong> awaiting review</span>` : ""}</div>
+      <div class="case-search"><label class="sr-only" for="case-search">Search this case</label>${icon("search")}<input id="case-search" type="search" value="${escapeHtml(searchQuery)}" placeholder="Search entities, collection, evidence, findings" autocomplete="off" aria-controls="case-search-results" aria-expanded="${Boolean(searchResultsHtml)}">${searchResultsHtml}</div>
+      <div class="topbar-stats" aria-label="Case totals"><span><strong>${caseData.entities?.length ?? 0}</strong> entities</span><span><strong>${accepted}</strong> relationships in case</span>${pending ? `<span class="attention"><strong>${pending}</strong> pending review</span>` : ""}</div>
       <button class="button button--ghost topbar-action" type="button" data-action="export-markdown">${icon("export")}<span>Export</span></button>
       <button class="button button--quiet topbar-action" type="button" data-action="new-case">New case</button>
     </header>
     <aside class="side-rail">
       <div class="case-pulse">
         <span class="eyebrow">Investigation pulse</span>
-        <strong>${pending ? `${pending} decision${pending === 1 ? "" : "s"} waiting` : "Ledger up to date"}</strong>
-        <span>${caseData.readings?.length ?? 0} readings · ${caseData.evidence?.length ?? 0} evidence</span>
+        <strong>${pending ? `${pending} relationship${pending === 1 ? "" : "s"} pending` : "No relationship reviews pending"}</strong>
+        <span>${caseData.readings?.length ?? 0} collection results · ${caseData.evidence?.length ?? 0} evidence entr${caseData.evidence?.length === 1 ? "y" : "ies"}</span>
       </div>
       ${navigation(activeView, counts, "desktop-nav")}
       <div class="rail-spacer"></div>
-      <button class="activity-button" type="button" data-action="toggle-activity"><span>Activity log</span><span>${caseData.log?.length ?? 0}</span></button>
+      <button class="activity-button" type="button" data-action="toggle-activity"><span>Audit trail</span><span>${caseData.log?.length ?? 0}</span></button>
     </aside>
     <div class="workspace-frame">
       ${noticeHtml}

@@ -5,8 +5,10 @@ import {
   candidateKey,
   dismissedCandidates,
   evidenceDraftFromReading,
+  groupInvestigativeLeads,
   relationshipView,
   reportSources,
+  searchCase,
   visibleCandidates,
 } from "../public/ui/view-models.js";
 import { addEvidence, addLink, exportMarkdown, newCase } from "../public/store.js";
@@ -74,6 +76,7 @@ test("evidence draft from a reading prefills provenance but requires a quote", (
     entity_ids: ["ent_domain"],
     url: "https://cloudflare-dns.com/dns-query?name=example.com",
     quote: "",
+    relevance: "",
     archive: false,
   });
 });
@@ -91,9 +94,9 @@ test("report sources deduplicate cited reading and evidence URLs", () => {
 test("link and evidence operations accept citation references and export them", () => {
   const caseData = fixtureCase();
   caseData.links = [];
-  addEvidence(caseData, { entity_ids: ["ent_domain"], url: "https://example.com/source", quote: "Example quote", reading_id: "rdg_dns" }, "human");
+  addEvidence(caseData, { entity_ids: ["ent_domain"], url: "https://example.com/source", quote: "Example quote", relevance: "Supports DNS resolution", reading_id: "rdg_dns" }, "human");
   const evidenceId = caseData.evidence[0].id;
-  addLink(caseData, { from: "ent_domain", to: "ent_ip", rationale: "Supported relationship", citations: [{ kind: "reading", id: "rdg_dns" }, { kind: "evidence", id: evidenceId }] }, "agent");
+  addLink(caseData, { from: "ent_domain", to: "ent_ip", relationship_type: "resolves_to", rationale: "Supported relationship", citations: [{ kind: "reading", id: "rdg_dns" }, { kind: "evidence", id: evidenceId }] }, "agent");
 
   assert.deepEqual(caseData.links[0].citations, [{ kind: "reading", id: "rdg_dns" }, { kind: "evidence", id: evidenceId }]);
   assert.equal(caseData.evidence[0].reading_id, "rdg_dns");
@@ -101,6 +104,8 @@ test("link and evidence operations accept citation references and export them", 
   assert.match(markdown, /Citations:/);
   assert.match(markdown, /cloudflare-dns\.com/);
   assert.match(markdown, /example\.com\/source/);
+  assert.match(markdown, /resolves to/);
+  assert.match(markdown, /Supports DNS resolution/);
 });
 
 test("evidence requires a nonblank exact quote", () => {
@@ -121,4 +126,27 @@ test("markdown export renders untrusted fields literally", () => {
   assert.doesNotMatch(markdown, /\[click\]\(javascript:/);
   assert.match(markdown, /\\\*not emphasis\\\*/);
   assert.match(markdown, /```+text\n# heading\n<script>alert\(1\)<\/script>\n```+/);
+});
+
+test("investigative leads are grouped by parent entity and collection method", () => {
+  const caseData = fixtureCase();
+  const groups = groupInvestigativeLeads(caseData, candidateMap);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].parent.value, "example.com");
+  assert.equal(groups[0].method, "DNS");
+  assert.equal(groups[0].leads[0].source_reading_id, "rdg_dns");
+});
+
+test("local case search returns typed results across investigation fields", () => {
+  const caseData = fixtureCase();
+  caseData.brief.objective = "Determine infrastructure ownership";
+  caseData.memo.gaps = "Need hosting history";
+  caseData.evidence.push({ id: "evd_1", entity_ids: ["ent_domain"], url: "https://example.com/source", quote: "Registration record", relevance: "Supports ownership", captured_at: "2026-09-01T10:00:00.000Z", archived_url: null, archive_status: "not_requested", archive_check_url: null, added_by: "human", untrusted: true, reading_id: null });
+
+  assert.equal(searchCase(caseData, "ownership")[0].kind, "case");
+  assert.equal(searchCase(caseData, "hosting history")[0].view, "report");
+  assert.equal(searchCase(caseData, "registration record")[0].kind, "evidence");
+  assert.equal(searchCase(caseData, "EXAMPLE.COM").some((result) => result.kind === "entity"), true);
+  assert.deepEqual(searchCase(caseData, "  "), []);
 });

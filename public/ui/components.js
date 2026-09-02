@@ -6,6 +6,7 @@ const TYPE_COLORS = {
   document: "#9aa7b7",
   claim: "#ff7b72",
 };
+import { collectionStatusLabel, relationshipStatusLabel } from "./copy.js";
 
 const ICONS = {
   overview: '<path d="M4 4h6v6H4zM14 4h6v4h-6zM14 12h6v8h-6zM4 14h6v6H4z"/>',
@@ -49,13 +50,15 @@ export function safeLink(url, text) {
 
 export function statusBadge(status) {
   const value = String(status ?? "unknown").toLowerCase();
+  const label = ["proposed", "accepted", "rejected"].includes(value) ? relationshipStatusLabel(value) : collectionStatusLabel(value);
   const glyph = value === "ok" || value === "accepted" ? icon("check") : value === "indeterminate" || value === "proposed" ? icon("warning") : icon("close");
-  return `<span class="badge badge--status badge--${escapeHtml(value)}">${glyph}<span>${escapeHtml(value)}</span></span>`;
+  return `<span class="badge badge--status badge--${escapeHtml(value)}">${glyph}<span>${escapeHtml(label)}</span></span>`;
 }
 
 export function actorBadge(actor) {
   const value = actor === "agent" ? "agent" : "human";
-  return `<span class="badge badge--actor badge--${value}"><span class="actor-dot"></span><span>${value}</span></span>`;
+  const label = value === "human" ? "investigator" : "agent";
+  return `<span class="badge badge--actor badge--${value}"><span class="actor-dot"></span><span>${label}</span></span>`;
 }
 
 export function typeBadge(type) {

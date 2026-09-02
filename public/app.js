@@ -1,13 +1,13 @@
 // OpenPivot investigation cockpit. The browser owns the ledger; WebMCP and human
 // interactions share the same domain operations while preserving actor attribution.
 import { createLocalCaseRepository } from "./repository.js";
-import { candidatesFrom, exportMarkdown, findEntity, log, setMemo } from "./store.js";
+import { candidatesFrom, exportMarkdown, findEntity, log } from "./store.js";
 import { sensor } from "./api.js";
 import { getModelContext, createRegistry } from "./webmcp.js";
 import { createToolset } from "./tools.js";
 import { PIVOT_SPECS, runPivot } from "./runs.js";
 import { createGraph, mergeGraphPositions } from "./graph.js";
-import { buildReviewQueue, candidateKey, dismissedCandidates, evidenceDraftFromReading, visibleCandidates } from "./ui/view-models.js";
+import { buildReviewQueue, candidateKey, dismissedCandidates, evidenceDraftFromReading, groupInvestigativeLeads, searchCase, visibleCandidates } from "./ui/view-models.js";
 import { escapeHtml, icon } from "./ui/components.js";
 import { renderShell } from "./ui/shell.js";
 import { renderOverview } from "./ui/overview.js";
@@ -16,6 +16,7 @@ import { captureFormState, createCaseActions, parseCandidate, resetTransientUi, 
 import { relationshipFocusFilter, renderRelationships } from "./ui/relationships.js";
 import { renderEvidence } from "./ui/evidence.js";
 import { renderReport } from "./ui/report.js";
+import { renderSearchResults } from "./ui/search.js";
 
 const app = document.getElementById("app");
 const repository = createLocalCaseRepository(localStorage);
@@ -40,6 +41,8 @@ const ui = {
   returnFocus: null,
   focusRelationship: null,
   skipFormRestore: false,
+  selectedLeadKeys: new Set(),
+  searchQuery: "",
 };
 
 function hydrateCandidates() {
@@ -131,7 +134,7 @@ function counts(queue) {
     entities: caseData.entities.length,
     relationships: caseData.links.filter((link) => link.status === "proposed").length,
     evidence: caseData.evidence.length,
-    report: caseData.memo.agent || caseData.memo.human ? 1 : 0,
+    report: [caseData.memo.human, caseData.memo.gaps, caseData.memo.methodology, caseData.memo.agent].some(Boolean) ? 1 : 0,
   };
 }
 
@@ -143,7 +146,7 @@ function modalHtml() {
   if (!ui.modal) return "";
   if (ui.modal.kind === "new-case") return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><h2 id="modal-title">Start a new case?</h2><p>The current case remains in local storage until this new case replaces it. Export first if you need a portable copy.</p><div class="modal-actions"><button class="button button--ghost" type="button" data-action="cancel-modal">Cancel</button><button class="button button--danger" type="button" data-action="confirm-new-case">Start new case</button></div></section></div>`;
   const affected = ui.modal.affected;
-  return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><h2 id="modal-title">Remove ${escapeHtml(ui.modal.label)}?</h2><p>This also removes ${affected.links} relationship${affected.links === 1 ? "" : "s"} and ${affected.readings} reading${affected.readings === 1 ? "" : "s"}, and detaches the entity from ${affected.evidence} evidence record${affected.evidence === 1 ? "" : "s"}. You can undo the removal until the next change.</p><div class="modal-actions"><button class="button button--ghost" type="button" data-action="cancel-modal">Cancel</button><button class="button button--danger" type="button" data-action="confirm-remove-entity" data-id="${escapeHtml(ui.modal.id)}">Remove entity</button></div></section></div>`;
+  return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><h2 id="modal-title">Remove ${escapeHtml(ui.modal.label)}?</h2><p>This also removes ${affected.links} relationship${affected.links === 1 ? "" : "s"} and ${affected.readings} collection result${affected.readings === 1 ? "" : "s"}, and detaches the entity from ${affected.evidence} evidence entr${affected.evidence === 1 ? "y" : "ies"}. You can undo the removal until the next case change.</p><div class="modal-actions"><button class="button button--ghost" type="button" data-action="cancel-modal">Cancel</button><button class="button button--danger" type="button" data-action="confirm-remove-entity" data-id="${escapeHtml(ui.modal.id)}">Remove entity</button></div></section></div>`;
 }
 
 function toastHtml() {
@@ -152,7 +155,7 @@ function toastHtml() {
 }
 
 function activeContent(queue, webmcpState) {
-  if (ui.view === "overview") return { contentHtml: renderOverview({ caseData, queue, webmcpState }), workbenchHtml: "" };
+  if (ui.view === "overview") return { contentHtml: renderOverview({ caseData, queue, webmcpState, leadGroups: groupInvestigativeLeads(caseData, ui.candidates), selectedLeadKeys: ui.selectedLeadKeys }), workbenchHtml: "" };
   if (ui.view === "entities") {
     const selected = ui.selected ? findEntity(caseData, ui.selected) : null;
     return renderEntities({ caseData, selected, candidates: selected ? visibleCandidates(caseData, ui.candidates, selected.id) : [], dismissedCandidates: selected ? dismissedCandidates(caseData, ui.candidates, selected.id) : [], activeRun: ui.activeRun, graphFilters: ui.graphFilters });
@@ -170,6 +173,7 @@ function render() {
   const queue = buildReviewQueue(caseData, ui.candidates);
   const webmcpState = { available: Boolean(modelContext), toolNames: registry.names() };
   const content = activeContent(queue, webmcpState);
+  const searchResults = searchCase(caseData, ui.searchQuery);
   const noticeHtml = ui.notice ? `<div class="notice">${icon("warning")}<span>${escapeHtml(ui.notice)}</span><button class="button button--quiet icon-button" type="button" data-action="dismiss-notice" aria-label="Dismiss error">${icon("close")}</button></div>` : "";
   app.innerHTML = renderShell({
     caseData,
@@ -179,6 +183,8 @@ function render() {
     contentHtml: content.contentHtml,
     workbenchHtml: ui.activityOpen ? activityWorkbench() : content.workbenchHtml,
     noticeHtml,
+    searchQuery: ui.searchQuery,
+    searchResultsHtml: renderSearchResults(ui.searchQuery, searchResults),
   });
   app.querySelector("[data-modal-host]").innerHTML = modalHtml();
   app.querySelector("[data-toast-host]").innerHTML = toastHtml();
@@ -218,6 +224,15 @@ function render() {
 function consumeCandidate(parentId, candidate) {
   const key = candidateKey(parentId, candidate);
   ui.candidates.set(parentId, (ui.candidates.get(parentId) ?? []).filter((item) => candidateKey(parentId, item) !== key));
+}
+
+function selectedLeadItems() {
+  const items = [];
+  for (const [parentId, candidates] of ui.candidates) for (const candidate of candidates) {
+    const key = candidateKey(parentId, candidate);
+    if (ui.selectedLeadKeys.has(key)) items.push({ parentId, candidate, key });
+  }
+  return items;
 }
 
 function restoreReturnFocus() {
@@ -266,24 +281,30 @@ app.addEventListener("submit", async (event) => {
     if (form.dataset.form === "add-relationship") {
       ui.skipFormRestore = true;
       ui.relationshipFilter = relationshipFocusFilter(ui.relationshipFilter, "proposed");
-      const relationship = actions.createRelationship({ from: data.from, to: data.to, rationale: data.rationale, citations: [] });
+      const relationship = actions.createRelationship({ from: data.from, to: data.to, relationship_type: data.relationship_type, rationale: data.rationale, citations: [] });
       ui.focusRelationship = relationship.id;
-      ui.toast = { message: "Relationship added to the review queue", undo: false };
+      ui.toast = { message: "Technical relationship queued for analyst review", undo: false };
       render();
     }
     if (form.dataset.form === "attach-evidence") {
       ui.skipFormRestore = true;
       const archiveResult = data.archive ? await archiveUrl(data.url) : { archived_url: null, archive_status: "not_requested", archive_check_url: null };
-      actions.attachEvidence({ entity_ids: formData.getAll("entity_ids"), url: data.url, quote: data.quote, reading_id: data.reading_id || null, ...archiveResult });
+      actions.attachEvidence({ entity_ids: formData.getAll("entity_ids"), url: data.url, quote: data.quote, relevance: data.relevance, reading_id: data.reading_id || null, ...archiveResult });
       ui.evidenceDraft = null;
-      ui.toast = { message: data.archive && archiveResult.archive_status === "pending" ? "Evidence attached; archive confirmation is pending" : "Evidence attached", undo: false };
+      ui.toast = { message: data.archive && archiveResult.archive_status === "pending" ? "Source excerpt registered; archive capture is not yet confirmed" : "Source excerpt added to the evidence register", undo: false };
       render();
       focusSelector(".evidence-list h2");
     }
     if (form.dataset.form === "edit-notes") {
       actions.editEntityNotes(data.entity_id, data.notes);
-      ui.toast = { message: "Entity notes updated", undo: false };
+      ui.toast = { message: "Entity investigation notes updated", undo: false };
       render();
+    }
+    if (form.dataset.form === "case-brief") {
+      actions.saveCaseBrief({ objective: data.objective, scope: data.scope, status: data.status });
+      ui.toast = { message: "Investigation definition updated", undo: false };
+      render();
+      focusSelector("#case-objective");
     }
   }
   catch (error) { showError(error); }
@@ -306,6 +327,12 @@ app.addEventListener("change", (event) => {
     render();
     focusSelector('[data-control="graph-status-filter"]');
   }
+  if (event.target.dataset.leadKey) {
+    if (event.target.checked) ui.selectedLeadKeys.add(event.target.dataset.leadKey);
+    else ui.selectedLeadKeys.delete(event.target.dataset.leadKey);
+    render();
+    focusSelector(`[data-lead-key="${CSS.escape(event.target.dataset.leadKey)}"]`);
+  }
   if (event.target.dataset.action === "import-json") {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -324,20 +351,41 @@ app.addEventListener("change", (event) => {
 });
 
 app.addEventListener("input", (event) => {
-  if (event.target.id !== "memo-human") return;
+  if (event.target.id === "case-search") {
+    ui.searchQuery = event.target.value;
+    render();
+    focusSelector("#case-search");
+    return;
+  }
+  const field = event.target.dataset.findingsField;
+  if (!field) return;
   actions.invalidateUndo();
-  caseData.memo.human = event.target.value;
+  caseData.memo[field] = event.target.value;
   repository.save(caseData);
 });
 
 app.addEventListener("focusout", (event) => {
-  if (event.target.id !== "memo-human") return;
-  log(caseData, "human", "write_memo", `${caseData.memo.human.length} chars`);
-  persist();
+  const field = event.target.dataset.findingsField;
+  if (!field) return;
+  log(caseData, "human", "write_findings", `${field} ${caseData.memo[field].length} chars`);
+  repository.save(caseData);
 });
 
 app.addEventListener("keydown", (event) => {
   const modal = event.target.closest?.("[role='dialog']");
+  if (event.target.id === "case-search" && event.key === "ArrowDown") {
+    const first = app.querySelector(".case-search-results [role='option']");
+    if (first) { event.preventDefault(); first.focus(); }
+    return;
+  }
+  if (event.key === "Escape" && ui.searchQuery && !ui.modal) {
+    event.preventDefault();
+    ui.searchQuery = "";
+    ui.skipFormRestore = true;
+    render();
+    focusSelector("#case-search");
+    return;
+  }
   if (event.key === "Escape" && ui.modal) {
     event.preventDefault();
     ui.modal = null;
@@ -415,11 +463,29 @@ app.addEventListener("click", async (event) => {
       const candidate = parseCandidate(element);
       const key = candidateKey(element.dataset.parent, candidate);
       actions.dismissCandidate(element.dataset.parent, candidate, key);
-      ui.toast = { message: `${candidate.value} dismissed`, undo: false, restoreCandidateKey: key };
+      ui.toast = { message: `${candidate.value} dismissed as an investigative lead`, undo: false, restoreCandidateKey: key };
       render();
       focusSelector(`[data-action="restore-candidate"][data-key="${CSS.escape(key)}"]`);
     }
-    if (action === "restore-candidate") { const key = element.dataset.key; actions.restoreCandidate(key); ui.toast = { message: "Candidate restored", undo: false }; render(); focusSelector(`[data-candidate-key="${CSS.escape(key)}"] [data-action='dismiss-candidate']`); }
+    if (action === "restore-candidate") { const key = element.dataset.key; actions.restoreCandidate(key); ui.toast = { message: "Investigative lead restored", undo: false }; render(); focusSelector(`[data-candidate-key="${CSS.escape(key)}"] [data-action='dismiss-candidate']`); }
+    if (action === "batch-add-leads") {
+      const items = selectedLeadItems();
+      actions.addSelectedLeads(items);
+      for (const item of items) consumeCandidate(item.parentId, item.candidate);
+      ui.selectedLeadKeys.clear();
+      await toolset.syncDynamicTools();
+      ui.toast = { message: `${items.length} investigative lead${items.length === 1 ? "" : "s"} added as entities`, undo: false };
+      render();
+      focusSelector(".lead-triage-toolbar");
+    }
+    if (action === "batch-dismiss-leads") {
+      const items = selectedLeadItems();
+      actions.dismissSelectedLeads(items);
+      ui.selectedLeadKeys.clear();
+      ui.toast = { message: `${items.length} investigative lead${items.length === 1 ? "" : "s"} dismissed`, undo: false };
+      render();
+      focusSelector(".lead-triage-toolbar");
+    }
     if (action === "request-remove-entity") {
       const entity = findEntity(caseData, id);
       ui.returnFocus = `[data-action="request-remove-entity"][data-id="${CSS.escape(id)}"]`;
@@ -433,9 +499,21 @@ app.addEventListener("click", async (event) => {
     if (action === "toggle-activity") { ui.activityOpen = true; render(); focusSelector(".workbench h2"); }
     if (action === "close-activity") { ui.activityOpen = false; render(); focusSelector('[data-action="toggle-activity"]'); }
     if (action === "open-relationship") { ui.view = "relationships"; ui.relationshipFilter = "all"; ui.focusRelationship = id; render(); }
-    if (action === "accept-relationship") { ui.relationshipFilter = relationshipFocusFilter(ui.relationshipFilter, "accepted"); ui.focusRelationship = id; actions.setRelationshipStatus(id, "accepted"); ui.toast = { message: "Relationship accepted", undo: false }; render(); focusSelector(`[data-relationship-id="${CSS.escape(id)}"]`); }
-    if (action === "reject-relationship") { ui.relationshipFilter = relationshipFocusFilter(ui.relationshipFilter, "rejected"); ui.focusRelationship = id; actions.setRelationshipStatus(id, "rejected"); ui.toast = { message: "Relationship rejected", undo: false }; render(); focusSelector(`[data-relationship-id="${CSS.escape(id)}"]`); }
+    if (action === "accept-relationship") { ui.relationshipFilter = relationshipFocusFilter(ui.relationshipFilter, "accepted"); ui.focusRelationship = id; actions.setRelationshipStatus(id, "accepted"); ui.toast = { message: "Relationship accepted into the case", undo: false }; render(); focusSelector(`[data-relationship-id="${CSS.escape(id)}"]`); }
+    if (action === "reject-relationship") { ui.relationshipFilter = relationshipFocusFilter(ui.relationshipFilter, "rejected"); ui.focusRelationship = id; actions.setRelationshipStatus(id, "rejected"); ui.toast = { message: "Relationship rejected from the case", undo: false }; render(); focusSelector(`[data-relationship-id="${CSS.escape(id)}"]`); }
     if (action === "evidence-from-reading") { ui.evidenceDraft = evidenceDraftFromReading(caseData, id); ui.view = "evidence"; render(); focusSelector("#evidence-url"); }
+    if (action === "search-result") {
+      ui.searchQuery = "";
+      ui.skipFormRestore = true;
+      ui.view = element.dataset.view;
+      if (element.dataset.entityId) { ui.selected = element.dataset.entityId; caseData.ui.selected_entity_id = ui.selected; repository.save(caseData); }
+      if (ui.view === "relationships") ui.focusRelationship = id;
+      render();
+      if (ui.view === "entities") focusSelector("[data-workbench-title]");
+      else if (ui.view === "relationships") focusSelector(`[data-relationship-id="${CSS.escape(id)}"]`);
+      else if (ui.view === "evidence") focusSelector(`[data-evidence-id="${CSS.escape(id)}"]`);
+      else focusSelector(".main-surface h1");
+    }
   } catch (error) { showError(error); }
 });
 

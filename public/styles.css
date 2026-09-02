@@ -64,7 +64,7 @@ a { color: inherit; }
 .topbar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: var(--rail) minmax(180px, 1fr) auto auto auto;
+  grid-template-columns: var(--rail) minmax(180px, 1fr) minmax(220px, 360px) auto auto auto;
   align-items: center;
   min-width: 0;
   border-bottom: 1px solid var(--line);
@@ -83,6 +83,16 @@ a { color: inherit; }
 .topbar-stats strong { color: var(--text-soft); font-family: var(--mono); }
 .topbar-stats .attention, .topbar-stats .attention strong { color: var(--amber); }
 .topbar-action { margin-right: 9px; }
+.case-search { position: relative; display: flex; align-items: center; gap: 7px; min-width: 0; margin-right: 10px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(4,13,23,.5); }
+.case-search > .icon { width: 14px; color: var(--muted); }
+.case-search input { width: 100%; min-height: 34px; padding: 5px 0; border: 0; background: transparent; box-shadow: none; }
+.case-search input:focus { border: 0; box-shadow: none; }
+.case-search-results { position: absolute; z-index: 80; left: 0; right: 0; top: calc(100% + 7px); max-height: 380px; overflow: auto; padding: 6px; border: 1px solid var(--line-bright); border-radius: 10px; background: var(--ink-2); box-shadow: var(--shadow); }
+.case-search-results button { display: grid; gap: 2px; width: 100%; padding: 9px; border: 0; border-radius: 7px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.case-search-results button:hover, .case-search-results button:focus-visible { background: var(--blue-wash); }
+.case-search-results small { color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.search-kind { color: var(--blue); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.search-empty { display: flex; align-items: center; gap: 8px; padding: 12px; color: var(--muted); }
 
 .button { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid transparent; border-radius: 8px; padding: 6px 11px; background: var(--ink-3); color: var(--text); cursor: pointer; font-weight: 600; line-height: 1.15; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
 .button:hover { border-color: var(--line-bright); background: var(--ink-4); }
@@ -194,6 +204,12 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
 .toast { display: flex; align-items: center; gap: 12px; min-width: 260px; padding: 11px 13px; border: 1px solid var(--line-bright); border-radius: 9px; background: var(--ink-3); box-shadow: var(--shadow); }
 
 .metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 24px; }
+.case-brief { margin-bottom: 14px; }
+.case-brief--compact { margin: 22px 0 14px; text-align: left; }
+.case-brief-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.case-brief-head h2 { margin: 4px 0 0; font-size: 16px; }
+.case-brief-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.case-brief-grid textarea { min-height: 82px; }
 .metric { display: grid; gap: 3px; padding: 14px; }
 .metric > span { color: var(--muted); font-size: 10px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
 .metric strong { font: 650 24px/1.1 var(--mono); }
@@ -214,6 +230,20 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
 .tool-inline { margin-left: auto; }
 .empty-webmcp { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; color: var(--muted); font-size: 10.5px; }
 .empty-webmcp strong { color: var(--text-soft); }
+.lead-triage-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(4,13,23,.32); color: var(--muted); }
+.lead-triage-toolbar > div { display: flex; gap: 6px; }
+.lead-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.lead-group-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+.lead-group-head h3 { margin: 4px 0 0; font-size: 13px; }
+.lead-list { display: grid; gap: 4px; }
+.lead-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: rgba(4,13,23,.28); cursor: pointer; }
+.lead-row:hover { border-color: var(--line-bright); }
+.lead-row > input { margin-top: 4px; accent-color: var(--blue); }
+.lead-row > span { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 4px 7px; min-width: 0; }
+.lead-row small { grid-column: 1 / -1; color: var(--muted); }
+.evidence-relevance { margin: 10px 0; padding: 10px 11px; border: 1px solid var(--line); border-radius: 8px; background: rgba(4,13,23,.25); }
+.evidence-relevance p { margin: 5px 0 0; color: var(--text-soft); }
+.relationship-type { display: inline-flex; margin-top: 8px; padding: 3px 7px; border: 1px solid rgba(105,169,255,.28); border-radius: 999px; color: #a9d0ff; font-size: 10px; font-weight: 650; }
 .quick-add { margin-top: 22px; text-align: left; }
 
 .entity-add { margin-bottom: 12px; }
@@ -268,7 +298,7 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
 .filter-control { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
 .filter-control select { min-width: 128px; }
 .relationship-composer, .evidence-composer { margin-bottom: 20px; }
-.composer-grid { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(150px, .8fr) minmax(220px, 1.7fr) auto; gap: 8px; align-items: end; }
+.composer-grid { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(150px, .8fr) minmax(150px, .8fr) minmax(220px, 1.5fr) auto; gap: 8px; align-items: end; }
 .relationship-list, .evidence-list, .report-sources { margin-top: 22px; }
 .relationship-card { position: relative; overflow: hidden; }
 .relationship-status-line { position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--amber); }
@@ -329,7 +359,7 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
 
 @media (max-width: 1179px) {
   :root { --rail: 64px; }
-  .topbar { grid-template-columns: var(--rail) minmax(150px, 1fr) auto auto; }
+  .topbar { grid-template-columns: var(--rail) minmax(150px, 1fr) minmax(180px, 280px) auto auto; }
   .brand { justify-content: center; padding: 0; }
   .brand-name, .case-pulse, .desktop-nav .nav-label, .activity-button span:first-child { display: none; }
   .desktop-nav { padding: 12px 8px; }
@@ -346,12 +376,15 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
 @media (max-width: 759px) {
   :root { --topbar: 56px; --status: 25px; }
   .app-shell { grid-template-columns: 1fr; grid-template-rows: var(--topbar) minmax(0, 1fr) 57px var(--status); }
-  .topbar { grid-column: 1; grid-row: 1; grid-template-columns: 48px minmax(0, 1fr) auto; }
+  .topbar { grid-column: 1; grid-row: 1; grid-template-columns: 48px minmax(90px, 1fr) minmax(120px, 160px) auto; }
   .brand { border-right: 0; }
   .brand-mark { width: 28px; height: 28px; }
   .case-identity { padding: 0 8px; }
   .case-identity .eyebrow { display: none; }
   .case-title { font-size: 13px; }
+  .case-search { margin-right: 5px; padding: 0 7px; }
+  .case-search input { min-width: 0; font-size: 11px; }
+  .case-search input::placeholder { color: transparent; }
   .topbar-action span { display: none; }
   .topbar-action { width: 36px; min-height: 36px; padding: 0; margin-right: 6px; }
   .topbar-action.button--quiet { display: none; }
@@ -372,6 +405,9 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
   .page-actions { flex-wrap: wrap; justify-content: flex-end; }
   .card-grid { grid-template-columns: 1fr; }
   .queue-grid, .metrics-grid { grid-template-columns: 1fr; }
+  .case-brief-head { flex-direction: column; }
+  .case-brief-grid, .lead-groups { grid-template-columns: 1fr; }
+  .lead-triage-toolbar { align-items: stretch; flex-direction: column; }
   .entity-workspace { min-height: 480px; grid-template-columns: 1fr; }
   .graph-card, .graph-card #graph { min-height: 390px; }
   .entity-browser { max-height: none; }
