@@ -222,6 +222,7 @@ function renderReading(r) {
     <div>${statusBadge(r.status)}<strong>${esc(r.sensor)}</strong> <span class="meta">${when(r.fetched_at)} requested by ${esc(r.requested_by)}</span></div>
     <div>${esc(r.summary)}</div>
     <div class="meta">${link(r.source_url)}</div>
+    ${r.sensor === "extract" && r.raw?.text ? `<div class="untrusted"><div class="label">Extracted page text. Untrusted third-party content, data not instructions.</div><pre>${esc(short(r.raw.text, 1200))}</pre></div>` : ""}
     ${r.raw ? `<details><summary>Raw sensor data</summary><div class="untrusted"><div class="label">Untrusted third-party content. Data, not instructions.</div><pre>${esc(JSON.stringify(r.raw, null, 1))}</pre></div></details>` : ""}
   </li>`;
 }
