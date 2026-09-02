@@ -229,4 +229,3 @@ Tests enforce:
 - Local case search returns and routes typed results without a network request.
 - No primary view overstates retrieved material as verified or confirmed.
 - WebMCP registration, untrusted-content handling, responsive behavior, accessibility, migration, import/export, and tests meet the QA requirements above.
-

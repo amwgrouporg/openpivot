@@ -165,4 +165,3 @@
 - [ ] Run the complete suite again from the clean committed branch.
 - [ ] Confirm the worktree is clean and the reviewer verdict has no critical or important findings.
 - [ ] Present local merge, pull request, and keep-branch options without merging or pushing automatically.
-
