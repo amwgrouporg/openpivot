@@ -5,6 +5,7 @@ export const ENTITY_TYPES = ["domain", "ip", "url", "org", "document", "claim"];
 export const LINK_STATUS = ["proposed", "accepted", "rejected"];
 export const ACTORS = ["human", "agent"];
 export const RELATIONSHIP_TYPES = ["resolves_to", "uses_nameserver", "registered_through", "hosted_on", "redirects_to", "references", "observed_with", "associated_with", "custom"];
+const SYMMETRIC_RELATIONSHIP_TYPES = new Set(["observed_with", "associated_with"]);
 
 export function uid(prefix) {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
@@ -207,7 +208,11 @@ export function addLink(c, { from, to, rationale, relationship_type = "associate
   if (!findEntity(c, from) || !findEntity(c, to)) throw new Error("both entities must exist");
   if (from === to) throw new Error("cannot link an entity to itself");
   if (!RELATIONSHIP_TYPES.includes(relationship_type)) throw new Error("relationship type outside vocabulary");
-  const dup = c.links.find((l) => (l.from === from && l.to === to) || (l.from === to && l.to === from));
+  const dup = c.links.find((link) => {
+    if (link.relationship_type !== relationship_type) return false;
+    if (link.from === from && link.to === to) return true;
+    return SYMMETRIC_RELATIONSHIP_TYPES.has(relationship_type) && link.from === to && link.to === from;
+  });
   if (dup) return { link: dup, created: false };
   const checkedCitations = citations.map((citation) => {
     if (!citation || !["reading", "evidence"].includes(citation.kind)) throw new Error("citation kind must be reading or evidence");
@@ -343,7 +348,7 @@ export function candidatesFrom(c, entity, env) {
       break;
     case "ip":
       if (d.hostname) add("domain", d.hostname, "ipinfo hostname");
-      if (d.org) add("org", d.org, "network owner");
+      if (d.org) add("org", d.org, "network organization");
       break;
     case "extract":
       for (const l of (d.links ?? []).slice(0, 40)) {

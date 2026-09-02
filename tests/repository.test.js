@@ -56,6 +56,37 @@ test("v1 migration copies records and initializes cockpit state", () => {
   assert.equal(before.ui, undefined);
 });
 
+test("v1 migration preserves legacy relationships and evidence while adding cyber fields", () => {
+  const before = legacyCase();
+  before.entities.push({ id: "ent_ip", type: "ip", value: "192.0.2.1", notes: "", added_by: "agent", added_at: "2026-09-01T10:02:00.000Z" });
+  before.links.push({ id: "lnk_legacy", from: "ent_domain", to: "ent_ip", rationale: "DNS A record", asserted_by: "agent", status: "proposed", at: "2026-09-01T10:03:00.000Z" });
+  before.evidence.push({ id: "evd_legacy", entity_ids: ["ent_domain"], url: "https://example.com/source", quote: "Legacy source excerpt", captured_at: "2026-09-01T10:04:00.000Z", archived_url: null, added_by: "human", untrusted: true });
+
+  const migrated = migrateCaseV1(before);
+
+  assert.equal(migrated.links[0].relationship_type, "associated_with");
+  assert.deepEqual(migrated.links[0].citations, []);
+  assert.equal(migrated.evidence[0].relevance, "");
+  assert.equal(migrated.evidence[0].archive_status, "not_requested");
+  assert.equal(before.links[0].relationship_type, undefined);
+  assert.equal(before.evidence[0].relevance, undefined);
+});
+
+test("repository load upgrades a populated legacy case instead of replacing it", () => {
+  const before = legacyCase();
+  before.entities.push({ id: "ent_ip", type: "ip", value: "192.0.2.1", notes: "", added_by: "agent", added_at: "2026-09-01T10:02:00.000Z" });
+  before.links.push({ id: "lnk_legacy", from: "ent_domain", to: "ent_ip", rationale: "DNS A record", asserted_by: "agent", status: "accepted", reviewed_by: "human", at: "2026-09-01T10:03:00.000Z" });
+  before.evidence.push({ id: "evd_legacy", entity_ids: ["ent_domain"], url: "https://example.com/source", quote: "Legacy source excerpt", captured_at: "2026-09-01T10:04:00.000Z", archived_url: null, added_by: "human", untrusted: true });
+  const storage = memoryStorage([["openpivot.case.v1", JSON.stringify(before)]]);
+
+  const loaded = createLocalCaseRepository(storage).load();
+
+  assert.equal(loaded.title, "Legacy investigation");
+  assert.equal(loaded.links[0].relationship_type, "associated_with");
+  assert.equal(loaded.evidence[0].relevance, "");
+  assert.equal(JSON.parse(storage.values.get("openpivot.case.v2")).links.length, 1);
+});
+
 test("repository migrates v1 once and retains the original backup", () => {
   const storage = memoryStorage([["openpivot.case.v1", JSON.stringify(legacyCase())]]);
   const repository = createLocalCaseRepository(storage);

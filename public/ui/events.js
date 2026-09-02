@@ -32,7 +32,7 @@ export function createCaseActions({ getCase, persist, setUi, runEntityPivot }) {
       if (result.created) {
         const citations = candidate.source_reading_id ? [{ kind: "reading", id: candidate.source_reading_id }] : [];
         const why = String(candidate.why ?? "").toLowerCase();
-        const relationship_type = why.includes("a record") || why.includes("aaaa") ? "resolves_to" : why.includes("nameserver") ? "uses_nameserver" : why.includes("registrar") ? "registered_through" : why.includes("network owner") ? "hosted_on" : why.includes("outbound link") ? "references" : "associated_with";
+        const relationship_type = why.includes("a record") || why.includes("aaaa") ? "resolves_to" : why.includes("nameserver") ? "uses_nameserver" : why.includes("registrar") ? "registered_through" : why.includes("outbound link") ? "references" : "associated_with";
         addLink(getCase(), { from: parentId, to: result.entity.id, relationship_type, rationale: candidate.why || "Lead surfaced by collection", citations }, "human", "proposed");
       }
       setUi({ selected: result.entity.id });
@@ -153,6 +153,10 @@ export function restoreFormState(root, state) {
     active.focus?.();
     if (state.selection && typeof active.setSelectionRange === "function") active.setSelectionRange(...state.selection);
   }
+}
+
+export function leadTriageFocusSelector(root) {
+  return root?.querySelector?.(".lead-triage-toolbar") ? ".lead-triage-toolbar" : ".main-surface h1";
 }
 
 export function resetTransientUi(ui) {

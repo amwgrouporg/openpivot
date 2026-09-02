@@ -1,3 +1,5 @@
+import { relationshipTypeLabel } from "./copy.js";
+
 const normalizedCandidateValue = (candidate) => String(candidate?.value ?? "").trim().toLowerCase();
 
 export function candidateKey(entityId, candidate) {
@@ -56,7 +58,7 @@ export function reportSources(caseData) {
     if (!source?.url || byUrl.has(source.url)) return;
     byUrl.set(source.url, source);
   };
-  for (const reading of caseData.readings) add({ kind: "reading", id: reading.id, url: reading.source_url, label: `${reading.sensor}: ${reading.summary}` });
+  for (const reading of caseData.readings) add({ kind: "reading", id: reading.id, url: reading.source_url, label: `${reading.sensor}: ${reading.summary}`, status: reading.status });
   for (const evidence of caseData.evidence) add({ kind: "evidence", id: evidence.id, url: evidence.url, label: evidence.quote });
   return [...byUrl.values()];
 }
@@ -88,7 +90,10 @@ export function searchCase(caseData, query) {
   };
   add("case", caseData.id, caseData.title, `${caseData.brief?.objective ?? ""} ${caseData.brief?.scope ?? ""}`, "overview");
   for (const entity of caseData.entities) add("entity", entity.id, entity.value, `${entity.type} ${entity.notes}`, "entities", entity.id);
-  for (const link of caseData.links) add("relationship", link.id, link.relationship_type ?? "associated_with", link.rationale, "relationships");
+  for (const link of caseData.links) {
+    const type = link.relationship_type ?? "associated_with";
+    add("relationship", link.id, relationshipTypeLabel(type), `${type} ${link.rationale}`, "relationships");
+  }
   for (const reading of caseData.readings) add("collection", reading.id, reading.sensor, `${reading.summary} ${reading.source_url ?? ""}`, "entities", reading.entity_id);
   for (const evidence of caseData.evidence) add("evidence", evidence.id, evidence.url, `${evidence.quote} ${evidence.relevance ?? ""}`, "evidence", evidence.entity_ids?.[0] ?? null);
   add("findings", "investigator-notes", "Investigator notes", caseData.memo.human, "report");

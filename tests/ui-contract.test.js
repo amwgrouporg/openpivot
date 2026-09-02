@@ -4,7 +4,7 @@ import { actorBadge, safeLink, statusBadge, typeBadge } from "../public/ui/compo
 import { renderShell } from "../public/ui/shell.js";
 import { renderOverview } from "../public/ui/overview.js";
 import { renderEntities } from "../public/ui/entities.js";
-import { captureFormState, createCaseActions, resetTransientUi, restoreFormState } from "../public/ui/events.js";
+import { captureFormState, createCaseActions, leadTriageFocusSelector, resetTransientUi, restoreFormState } from "../public/ui/events.js";
 import { relationshipFocusFilter, renderRelationships } from "../public/ui/relationships.js";
 import { renderEvidence } from "../public/ui/evidence.js";
 import { renderReport } from "../public/ui/report.js";
@@ -209,6 +209,16 @@ test("report keeps analyst editing separate from the agent draft and sources", (
   assert.match(html, /example\.com\/source/);
 });
 
+test("findings renders each collection source with its actual collection status", () => {
+  const caseData = newCase("Source status");
+  caseData.readings.push({ id: "rdg_1", entity_id: "ent_1", sensor: "archive", status: "indeterminate", summary: "request sent; confirmation pending", source_url: "https://web.archive.org/save/example.com", fetched_at: "2026-09-01T10:00:00.000Z", requested_by: "agent", raw: {}, untrusted: true });
+
+  const html = renderReport({ caseData });
+
+  assert.match(html, /Collection inconclusive/);
+  assert.doesNotMatch(html, /Retrieved/);
+});
+
 test("case search renders typed local results", () => {
   const html = renderSearchResults("example", [{ kind: "entity", id: "ent_1", title: "example.com", context: "domain", view: "entities", entity_id: "ent_1" }]);
   assert.match(html, /Case search results/);
@@ -273,6 +283,24 @@ test("batch lead actions add or dismiss without asserting relationships", () => 
 
   actions.dismissSelectedLeads(leads);
   assert.deepEqual(caseData.ui.dismissed_candidates.sort(), leads.map((lead) => lead.key).sort());
+});
+
+test("network-organization lead defaults to a neutral association", () => {
+  const caseData = newCase("Network association");
+  caseData.entities.push({ id: "ent_ip", type: "ip", value: "192.0.2.1", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
+  const actions = createCaseActions({ getCase: () => caseData, persist() {}, setUi() {}, runEntityPivot: async () => ({}) });
+
+  actions.addAndProposeCandidate("ent_ip", { type: "org", value: "Example Network", why: "network organization", source_reading_id: null });
+
+  assert.equal(caseData.links[0].relationship_type, "associated_with");
+});
+
+test("batch triage focus falls back to the review heading when no leads remain", () => {
+  const rootWithLeads = { querySelector: (selector) => selector === ".lead-triage-toolbar" ? {} : null };
+  const rootWithoutLeads = { querySelector: () => null };
+
+  assert.equal(leadTriageFocusSelector(rootWithLeads), ".lead-triage-toolbar");
+  assert.equal(leadTriageFocusSelector(rootWithoutLeads), ".main-surface h1");
 });
 
 test("a later mutation invalidates entity-removal undo", () => {

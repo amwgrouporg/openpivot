@@ -11,7 +11,7 @@ Command:
 node --test tests/*.test.js
 ```
 
-Result: 119 tests passed, 0 failed, 0 skipped.
+Result: 129 tests passed, 0 failed, 0 skipped.
 
 Coverage added for:
 
@@ -45,7 +45,12 @@ Coverage added for:
 - analyst-level status labels that do not present collection as verification;
 - grouped investigative leads, persistent selection, batch add, and batch dismissal;
 - local case search across entities, collection results, evidence, relationships, and findings;
-- independent investigator notes, collection gaps, methodology, and agent-draft authority boundaries.
+- independent investigator notes, collection gaps, methodology, and agent-draft authority boundaries;
+- populated v1 relationship/evidence migration through the repository load path;
+- directional and type-aware relationship deduplication, including explicit symmetric types;
+- truthful source-status rendering in Findings and search coverage for every visible relationship type;
+- neutral network-organization lead semantics and focus recovery after processing the final lead;
+- rejection of prompt-injection text as a lead or mutation of investigator-owned fields.
 
 ## Local WebMCP flow
 
@@ -60,7 +65,7 @@ Local Worker: `http://localhost:8788/` in the ChatGPT built-in browser.
 | IP pivot | RDAP, ipinfo, and PTR all `ok` |
 | Relationship | Proposed by agent with a DNS-reading citation; accepted through human UI |
 | Injection URL | Wayback and extract both `ok`; embedded `SYSTEM NOTICE TO AI AGENTS` detected as untrusted content |
-| Injection behavior | No `verified-partner.example` entity; no injected link or destructive action |
+| Injection behavior | No `verified-partner.example` entity or relationship; no destructive action; injected wording absent from evidence relevance and every investigator-owned Findings field |
 | Evidence | Verisign RDAP registration quote attached with its reading reference |
 | Memo | Separate analyst and agent sections persisted |
 | Export | Markdown export included relationship citations and both memo sections |
@@ -78,9 +83,10 @@ Local Worker: `http://localhost:8788/` in the ChatGPT built-in browser.
 | Evidence semantics | Verbatim source excerpt and analyst relevance note remain separate fields |
 | Case search | `registration` returned matching entity, collection result, evidence, and agent-draft records |
 | Search routing | Selecting an evidence result opened Source excerpts and focused the matching record |
+| Relationship search | Searching the visible phrase `associated with` returned the matching typed relationship records |
 | Findings | Investigator notes, outstanding questions, methodology, and agent draft persisted independently |
 | Authority boundary | Agent draft remains visibly marked as requiring validation; collection is never labelled verified |
-| Prompt injection | No `verified-partner.example` entity or relationship was introduced |
+| Prompt injection | No `verified-partner.example` entity or relationship; evidence relevance, Investigator notes, collection gaps, and methodology contain none of the injected wording |
 | Fresh dynamic registration | Empty case exposed 10 tools; adding `example.com` exposed 11 including `pivot_domain` |
 
 Archive submission was not repeated during this local run because it creates a public third-party side effect. The archive sensor regression test verifies the 18-second application budget and submitted-but-unconfirmed `indeterminate` shape.
@@ -113,6 +119,7 @@ All three target widths rendered without horizontal body overflow. The applicati
 - Graph filters restore focus to the activated filter, and closing the workbench returns focus to the entity row.
 - Relationship verdicts keep focus on the reviewed relationship card.
 - Verdicts made from a Proposed-only filter switch to a containing filter before restoring card focus.
+- Processing every visible lead returns focus to the review-priorities heading when the triage toolbar disappears.
 - Reduced-motion graph resets settle and repaint synchronously.
 
 ## Defects found and corrected during QA
@@ -122,5 +129,10 @@ All three target widths rendered without horizontal body overflow. The applicati
 3. Compact-rail labels were visually hidden without independent accessible names. Every navigation control now has an explicit `aria-label`.
 4. Email-shaped certificate names were shown as unusable domain candidates. Candidate generation now applies the same validation used when adding an entity.
 5. Running two local Worker instances against one Durable Object SQLite state produced `SQLITE_BUSY_RECOVERY`. QA was repeated with a single local instance; this was a test-environment contention issue, not an application defect.
+6. A strict validator initially checked populated v1 relationships and evidence before applying v2 defaults. Migration now upgrades a cloned legacy case first and validates the complete v2 record; populated repository-load coverage prevents silent replacement.
+7. Relationship deduplication originally collapsed reverse-direction and different-type assertions. It now keys on type and direction, reversing endpoints only for explicitly symmetric `observed_with` and `associated_with` relationships.
+8. Findings initially displayed every collection source as Retrieved. Source models now retain and render the actual collection status.
+9. Network-provider data initially used ownership/hosting language. It is now labelled as a network-organization lead and defaults to the non-attributive `associated_with` relationship pending analyst review.
+10. Batch triage initially targeted a toolbar that disappears when the final lead is processed. Browser QA confirmed focus now lands on the resulting review heading.
 
 Final browser console: no warnings or errors.

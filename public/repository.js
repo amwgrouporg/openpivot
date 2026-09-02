@@ -72,7 +72,6 @@ export function isValidCase(value) {
 
 export function migrateCaseV1(input) {
   if (!isValidCase(input) || input.version !== 1) throw new Error("invalid v1 case");
-  assertNestedCase(input);
   const migrated = clone(input);
   migrated.version = 2;
   migrated.brief = { objective: "", scope: "", status: "active", updated_at: migrated.created_at };
@@ -81,6 +80,7 @@ export function migrateCaseV1(input) {
   migrated.evidence = migrated.evidence.map((evidence) => ({ ...evidence, relevance: evidence.relevance ?? "", reading_id: evidence.reading_id ?? null, archive_status: evidence.archived_url ? "confirmed" : "not_requested", archive_check_url: null }));
   migrated.runs = [];
   migrated.ui = { selected_entity_id: null, graph_positions: {}, dismissed_candidates: [] };
+  assertNestedCase(migrated);
   return migrated;
 }
 

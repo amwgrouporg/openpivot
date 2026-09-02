@@ -12,7 +12,7 @@ import { escapeHtml, icon } from "./ui/components.js";
 import { renderShell } from "./ui/shell.js";
 import { renderOverview } from "./ui/overview.js";
 import { renderEntities } from "./ui/entities.js";
-import { captureFormState, createCaseActions, parseCandidate, resetTransientUi, restoreFormState } from "./ui/events.js";
+import { captureFormState, createCaseActions, leadTriageFocusSelector, parseCandidate, resetTransientUi, restoreFormState } from "./ui/events.js";
 import { relationshipFocusFilter, renderRelationships } from "./ui/relationships.js";
 import { renderEvidence } from "./ui/evidence.js";
 import { renderReport } from "./ui/report.js";
@@ -476,7 +476,7 @@ app.addEventListener("click", async (event) => {
       await toolset.syncDynamicTools();
       ui.toast = { message: `${items.length} investigative lead${items.length === 1 ? "" : "s"} added as entities`, undo: false };
       render();
-      focusSelector(".lead-triage-toolbar");
+      focusSelector(leadTriageFocusSelector(app));
     }
     if (action === "batch-dismiss-leads") {
       const items = selectedLeadItems();
@@ -484,7 +484,7 @@ app.addEventListener("click", async (event) => {
       ui.selectedLeadKeys.clear();
       ui.toast = { message: `${items.length} investigative lead${items.length === 1 ? "" : "s"} dismissed`, undo: false };
       render();
-      focusSelector(".lead-triage-toolbar");
+      focusSelector(leadTriageFocusSelector(app));
     }
     if (action === "request-remove-entity") {
       const entity = findEntity(caseData, id);

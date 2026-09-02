@@ -10,8 +10,8 @@ and each selector needs several lookups across public technical sources. Analyst
 across many tabs. Agents left to browse those registries guess at UIs and misread results.
 Neither party keeps provenance.
 
-OpenPivot puts the pivots behind WebMCP tools on a shared board. The agent decides which
-pivot to run next and what a result means. The investigator defines the scope, accepts or rejects the relationships
+OpenPivot puts the pivots behind WebMCP tools on a shared board. The agent runs requested
+pivots, summarizes collection results, and surfaces leads. The investigator defines the scope, accepts or rejects the relationships
 the agent proposes, and records findings. Every entity, relationship, evidence item and collection result
 carries who asserted it, when, and the source URL.
 
