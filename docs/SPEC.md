@@ -33,7 +33,8 @@ Audience: journalists, fact-checkers, security researchers, trust-and-safety tea
 
 - `public/` static page: vanilla ES modules, D3 force graph from cdnjs.
 - `src/worker.js` Cloudflare Worker: `/api/*` sensor routes; serves `public/` as
-  static assets. Per-IP rate limit on `/api/*`.
+  static assets. Per-client rate limit on `/api/*`: a Durable Object per client key (exact,
+  shared across isolates) plus the rate-limit binding; a failing limiter refuses, never passes.
 - Secrets: `BRAVE_API_KEY`, `IPINFO_TOKEN`, `URLSCAN_API_KEY` (Worker secrets, never
   in the repo). Routes degrade to INDETERMINATE when a secret is absent.
 

@@ -10,9 +10,18 @@ not_found_handling = "single-page-application"
 [observability]
 enabled = true
 
-# Per-IP rate limit on /api/*. 60 sensor calls per minute per client.
-[[unsafe.bindings]]
+# Per-client rate limit on /api/*: 60 sensor calls per minute.
+# Layer 1: a Durable Object per client key, exact and shared across all isolates.
+[[durable_objects.bindings]]
+name = "LIMITER"
+class_name = "Limiter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Limiter"]
+
+# Layer 2: the Cloudflare rate-limit binding (approximate, per location).
+[[ratelimits]]
 name = "RATE_LIMITER"
-type = "ratelimit"
 namespace_id = "1001"
 simple = { limit = 60, period = 60 }

@@ -16,24 +16,41 @@ import { searchSensor } from "./sensors/search.js";
 import { wikidataSensor } from "./sensors/wikidata.js";
 import { extractSensor } from "./sensors/extract.js";
 import { buildQueries } from "./queries.js";
+export { Limiter } from "./limiter_do.js";
 
 const SENSORS = ["dns", "ptr", "rdap", "certs", "wayback", "archive", "urlscan", "ip", "search", "wikidata", "extract", "queries"];
+const RATE_LIMIT = 60;
+const RATE_WINDOW_MS = 60_000;
 
 function bad(sensor, message) {
   return jsonResponse(indeterminate(sensor, null, `invalid input: ${message}`), { status: 400 });
 }
 
-async function rateLimited(request, env) {
-  if (!env.RATE_LIMITER?.limit) return false;
+// Returns { limited, retry_after }. Layer 1 is the Durable Object (exact, shared across
+// every isolate). Layer 2 is the Cloudflare rate-limit binding. Either layer throwing
+// fails closed: a broken limiter is never an open door.
+export async function rateLimited(request, env) {
   const key = request.headers.get("cf-connecting-ip") ?? "unknown";
-  try {
-    const { success } = await env.RATE_LIMITER.limit({ key });
-    return !success;
-  } catch {
-    // A broken limiter must not turn into an open door or a dead service. Fail closed
-    // for the caller but say so.
-    return true;
+  if (env.LIMITER?.idFromName) {
+    try {
+      const stub = env.LIMITER.get(env.LIMITER.idFromName(key));
+      const res = await stub.fetch("https://limiter/", { method: "POST", body: JSON.stringify({ limit: RATE_LIMIT, window_ms: RATE_WINDOW_MS }) });
+      const verdict = await res.json();
+      if (verdict.allowed === false) return { limited: true, retry_after: verdict.retry_after ?? 60 };
+      if (verdict.allowed !== true) return { limited: true, retry_after: 60 };
+    } catch {
+      return { limited: true, retry_after: 60 };
+    }
   }
+  if (env.RATE_LIMITER?.limit) {
+    try {
+      const { success } = await env.RATE_LIMITER.limit({ key });
+      if (!success) return { limited: true, retry_after: 60 };
+    } catch {
+      return { limited: true, retry_after: 60 };
+    }
+  }
+  return { limited: false, retry_after: 0 };
 }
 
 export async function handleApi(request, env) {
@@ -46,12 +63,13 @@ export async function handleApi(request, env) {
       ok: true,
       sensors: SENSORS,
       secrets_present: { brave: Boolean(env.BRAVE_API_KEY), ipinfo: Boolean(env.IPINFO_TOKEN), urlscan: Boolean(env.URLSCAN_API_KEY) },
-      rate_limiter: Boolean(env.RATE_LIMITER?.limit),
+      rate_limit: { per_client_per_minute: RATE_LIMIT, durable_object: Boolean(env.LIMITER?.idFromName), binding: Boolean(env.RATE_LIMITER?.limit) },
     });
   }
 
-  if (await rateLimited(request, env)) {
-    return jsonResponse(indeterminate(route, null, "rate limited: 60 sensor calls per minute per client"), { status: 429 });
+  const rl = await rateLimited(request, env);
+  if (rl.limited) {
+    return jsonResponse(indeterminate(route, null, `rate limited: ${RATE_LIMIT} sensor calls per minute per client; retry after ${rl.retry_after}s`), { status: 429, headers: { "retry-after": String(rl.retry_after) } });
   }
 
   switch (route) {

@@ -31,7 +31,9 @@ Markdown case file                                 |  Wikidata, HTMLRewriter ext
 ```
 
 The Worker is deterministic. It validates inputs, times out upstreams, rate-limits per
-client and returns one envelope shape for every sensor:
+client (a Durable Object holds one exact sliding-window counter per client, with Cloudflare's
+rate-limit binding as a second layer; either layer failing refuses rather than passes) and
+returns one envelope shape for every sensor:
 
 ```json
 { "ok": true, "sensor": "rdap", "source_url": "https://rdap.verisign.com/com/v1/domain/example.com",
@@ -105,7 +107,7 @@ No accounts, no server-side storage: the case lives in your browser until you ex
 
 ```
 public/    board: index.html, app.js (tools + UI), store.js (ledger), graph.js (D3), webmcp.js
-src/       Worker: worker.js (routes, rate limit), validate.js, envelope.js, sensors/*.js, queries.js
+src/       Worker: worker.js (routes), limiter_do.js (rate limit), validate.js, envelope.js, sensors/*.js, queries.js
 tests/     node --test, pure functions and failure paths
 docs/      SPEC.md (frozen scope), SUBMISSION.md
 ```
