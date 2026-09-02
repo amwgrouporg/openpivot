@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { normalizeAnswer, reverseName, expandIPv6, dnsSensor } from "../src/sensors/dns.js";
 import { normalizeDomain, normalizeIp as normalizeRdapIp, rdapSensor, parseBootstrap, registryBaseFor } from "../src/sensors/rdap.js";
 import { normalizeCerts, certsSensor } from "../src/sensors/certs.js";
-import { normalizeCdx, waybackSensor } from "../src/sensors/wayback.js";
+import { archiveNowSensor, normalizeCdx, waybackSensor } from "../src/sensors/wayback.js";
 import { normalizeUrlscan } from "../src/sensors/urlscan.js";
 import { normalizeIpinfo } from "../src/sensors/ip.js";
 import { normalizeBrave, searchSensor } from "../src/sensors/search.js";
@@ -128,6 +128,19 @@ test("wayback normaliser handles header row and empty index", () => {
 test("wayback sensor: http 503 is indeterminate", async () => {
   const e = await waybackSensor("example.com", async () => jsonRes([], 503));
   assert.equal(e.status, "indeterminate");
+});
+
+test("archive submission uses a browser-safe timeout budget", async () => {
+  let observedTimeout;
+  const response = { status: 202, headers: { get: () => null } };
+  const result = await archiveNowSensor("https://example.com/page", async (_url, _options, timeout) => {
+    observedTimeout = timeout;
+    return response;
+  });
+
+  assert.equal(observedTimeout, 18000);
+  assert.equal(result.status, "indeterminate");
+  assert.equal(result.data.submitted, true);
 });
 
 test("urlscan, ipinfo, brave, wikidata normalisers", () => {

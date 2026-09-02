@@ -109,7 +109,7 @@ export async function archiveNowSensor(target, fetcher = fetchWithTimeout) {
   const checkUrl = `https://web.archive.org/web/*/${target}`;
   let res;
   try {
-    res = await fetcher(sourceUrl, { method: "GET", redirect: "manual", headers: { "user-agent": UA } }, 28000);
+    res = await fetcher(sourceUrl, { method: "GET", redirect: "manual", headers: { "user-agent": UA } }, 18000);
   } catch (e) {
     return indeterminate("archive", sourceUrl, `${e.message}; the request may still complete, check ${checkUrl}`, { submitted: true, check_url: checkUrl });
   }
