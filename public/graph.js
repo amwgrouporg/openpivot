@@ -6,6 +6,11 @@ export function mergeGraphPositions(current, visible, { replace = false } = {}) 
   return replace ? { ...visible } : { ...(current ?? {}), ...(visible ?? {}) };
 }
 
+export function settleImmediately(simulation, paint) {
+  simulation.alpha(1).tick(80).stop();
+  paint();
+}
+
 export function graphListModel(caseData, filters = {}) {
   const allowedTypes = filters.types?.length ? new Set(filters.types) : null;
   const allowedStatuses = filters.statuses?.length
@@ -130,8 +135,7 @@ export function createGraph(svgEl, options = {}) {
     simulation.nodes(nodes).on("tick", paint);
     simulation.force("link").links(links);
     if (reducedMotion) {
-      simulation.alpha(1).tick(80).stop();
-      paint();
+      settleImmediately(simulation, paint);
     } else simulation.alpha(0.55).restart();
   }
 
@@ -156,7 +160,10 @@ export function createGraph(svgEl, options = {}) {
     for (const node of nodesRef) { node.fx = null; node.fy = null; delete node.x; delete node.y; }
     onPositionsChange({}, { replace: true });
     if (reducedMotion) {
-      simulation.alpha(1).tick(80).stop();
+      settleImmediately(simulation, () => {
+        linkLayer.selectAll("line.graph-link").attr("x1", (item) => item.source.x).attr("y1", (item) => item.source.y).attr("x2", (item) => item.target.x).attr("y2", (item) => item.target.y);
+        nodeLayer.selectAll("g.graph-node").attr("transform", (item) => `translate(${item.x},${item.y})`);
+      });
     } else simulation.alpha(1).restart();
   }
 

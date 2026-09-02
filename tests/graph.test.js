@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { graphListModel, mergeGraphPositions } from "../public/graph.js";
+import { graphListModel, mergeGraphPositions, settleImmediately } from "../public/graph.js";
 import { newCase } from "../public/store.js";
 
 function graphCase() {
@@ -46,4 +46,17 @@ test("filtered graph position updates preserve hidden node positions", () => {
   const current = { ent_1: { x: 10, y: 20 }, ent_hidden: { x: 80, y: 90 } };
   assert.deepEqual(mergeGraphPositions(current, { ent_1: { x: 30, y: 40 } }), { ent_1: { x: 30, y: 40 }, ent_hidden: { x: 80, y: 90 } });
   assert.deepEqual(mergeGraphPositions(current, {}, { replace: true }), {});
+});
+
+test("reduced-motion settling repaints after synchronous ticks", () => {
+  const calls = [];
+  const simulation = {
+    alpha(value) { calls.push(["alpha", value]); return this; },
+    tick(count) { calls.push(["tick", count]); return this; },
+    stop() { calls.push(["stop"]); return this; },
+  };
+
+  settleImmediately(simulation, () => calls.push(["paint"]));
+
+  assert.deepEqual(calls, [["alpha", 1], ["tick", 80], ["stop"], ["paint"]]);
 });

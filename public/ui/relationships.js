@@ -1,6 +1,10 @@
 import { actorBadge, escapeHtml, formatTime, icon, safeLink, sectionHeader, statusBadge, typeBadge } from "./components.js";
 import { relationshipView } from "./view-models.js";
 
+export function relationshipFocusFilter(currentFilter, resultingStatus) {
+  return currentFilter === "all" || currentFilter === resultingStatus ? currentFilter : "all";
+}
+
 function citationCard(citation) {
   if (citation.missing) return `<div class="citation citation--missing">Missing ${escapeHtml(citation.kind)}: <span class="mono">${escapeHtml(citation.id)}</span></div>`;
   const source = citation.kind === "reading" ? citation.source_url : citation.url;

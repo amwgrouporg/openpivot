@@ -11,7 +11,7 @@ Command:
 node --test tests/*.test.js
 ```
 
-Result: 105 tests passed, 0 failed, 0 skipped.
+Result: 107 tests passed, 0 failed, 0 skipped.
 
 Coverage added for:
 
@@ -89,6 +89,8 @@ All three target widths rendered without horizontal body overflow. The applicati
 - Navigation moves focus to the destination heading; entity selection moves it to the workbench title.
 - Graph filters restore focus to the activated filter, and closing the workbench returns focus to the entity row.
 - Relationship verdicts keep focus on the reviewed relationship card.
+- Verdicts made from a Proposed-only filter switch to a containing filter before restoring card focus.
+- Reduced-motion graph resets settle and repaint synchronously.
 
 ## Defects found and corrected during QA
 

@@ -40,7 +40,7 @@ function readingCard(reading) {
 
 function candidateCard(candidate, selectedId) {
   const encoded = escapeHtml(JSON.stringify(candidate));
-  return `<article class="candidate-card card"><div class="card-body">
+  return `<article class="candidate-card card" data-candidate-key="${escapeHtml(candidateKey(selectedId, candidate))}"><div class="card-body">
     <div class="card-row">${typeBadge(candidate.type)}<strong class="selector">${escapeHtml(candidate.value)}</strong></div>
     <p>${escapeHtml(candidate.why)}</p>
     <div class="candidate-actions"><button class="button button--small" type="button" data-action="add-candidate" data-parent="${escapeHtml(selectedId)}" data-candidate="${encoded}">Add</button><button class="button button--small button--primary" type="button" data-action="add-propose-candidate" data-parent="${escapeHtml(selectedId)}" data-candidate="${encoded}">Add + propose link</button><button class="button button--small button--quiet" type="button" data-action="dismiss-candidate" data-parent="${escapeHtml(selectedId)}" data-candidate="${encoded}">Dismiss</button></div>

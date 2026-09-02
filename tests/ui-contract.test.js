@@ -5,7 +5,7 @@ import { renderShell } from "../public/ui/shell.js";
 import { renderOverview } from "../public/ui/overview.js";
 import { renderEntities } from "../public/ui/entities.js";
 import { captureFormState, createCaseActions, resetTransientUi, restoreFormState } from "../public/ui/events.js";
-import { renderRelationships } from "../public/ui/relationships.js";
+import { relationshipFocusFilter, renderRelationships } from "../public/ui/relationships.js";
 import { renderEvidence } from "../public/ui/evidence.js";
 import { renderReport } from "../public/ui/report.js";
 import { newCase } from "../public/store.js";
@@ -96,7 +96,7 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   const selected = { id: "ent_1", type: "domain", value: "example.com", notes: "Seed", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" };
   caseData.entities.push(selected);
   const activeRun = { entity_id: "ent_1", status: "running", sensors: [{ name: "dns", status: "running" }, { name: "rdap", status: "queued" }] };
-  const rendered = renderEntities({ caseData, selected, candidates: [], activeRun });
+  const rendered = renderEntities({ caseData, selected, candidates: [{ type: "domain", value: "www.example.com", why: "certificate", source_reading_id: null }], activeRun });
 
   assert.match(rendered.contentHtml, /id="graph"/);
   assert.match(rendered.contentHtml, /data-control="graph-status-filter"/);
@@ -105,6 +105,7 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   assert.match(rendered.contentHtml, /data-graph-semantic/);
   assert.match(rendered.workbenchHtml, /example\.com/);
   assert.match(rendered.workbenchHtml, /data-workbench-title[^>]*tabindex="-1"/);
+  assert.match(rendered.workbenchHtml, /data-candidate-key="ent_1:domain:www\.example\.com"/);
   assert.match(rendered.workbenchHtml, /dns/);
   assert.match(rendered.workbenchHtml, /running/);
   assert.match(rendered.workbenchHtml, /data-action="run-pivot"[^>]*disabled/);
@@ -156,6 +157,12 @@ test("proposed relationship card exposes rationale, citation, and both review ch
   assert.match(html, /cloudflare-dns\.com/);
   assert.match(html, /data-action="accept-relationship"/);
   assert.match(html, /data-action="reject-relationship"/);
+});
+
+test("relationship focus changes to a filter containing the resulting status", () => {
+  assert.equal(relationshipFocusFilter("proposed", "accepted"), "all");
+  assert.equal(relationshipFocusFilter("accepted", "accepted"), "accepted");
+  assert.equal(relationshipFocusFilter("all", "rejected"), "all");
 });
 
 test("evidence draft prefills provenance while leaving the exact quote empty", () => {

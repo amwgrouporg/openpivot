@@ -13,7 +13,7 @@ import { renderShell } from "./ui/shell.js";
 import { renderOverview } from "./ui/overview.js";
 import { renderEntities } from "./ui/entities.js";
 import { captureFormState, createCaseActions, parseCandidate, resetTransientUi, restoreFormState } from "./ui/events.js";
-import { renderRelationships } from "./ui/relationships.js";
+import { relationshipFocusFilter, renderRelationships } from "./ui/relationships.js";
 import { renderEvidence } from "./ui/evidence.js";
 import { renderReport } from "./ui/report.js";
 
@@ -265,6 +265,7 @@ app.addEventListener("submit", async (event) => {
     }
     if (form.dataset.form === "add-relationship") {
       ui.skipFormRestore = true;
+      ui.relationshipFilter = relationshipFocusFilter(ui.relationshipFilter, "proposed");
       const relationship = actions.createRelationship({ from: data.from, to: data.to, rationale: data.rationale, citations: [] });
       ui.focusRelationship = relationship.id;
       ui.toast = { message: "Relationship added to the review queue", undo: false };
@@ -418,7 +419,7 @@ app.addEventListener("click", async (event) => {
       render();
       focusSelector(`[data-action="restore-candidate"][data-key="${CSS.escape(key)}"]`);
     }
-    if (action === "restore-candidate") { actions.restoreCandidate(element.dataset.key); ui.toast = { message: "Candidate restored", undo: false }; render(); focusSelector(".candidate-card [data-action='dismiss-candidate']"); }
+    if (action === "restore-candidate") { const key = element.dataset.key; actions.restoreCandidate(key); ui.toast = { message: "Candidate restored", undo: false }; render(); focusSelector(`[data-candidate-key="${CSS.escape(key)}"] [data-action='dismiss-candidate']`); }
     if (action === "request-remove-entity") {
       const entity = findEntity(caseData, id);
       ui.returnFocus = `[data-action="request-remove-entity"][data-id="${CSS.escape(id)}"]`;
@@ -432,8 +433,8 @@ app.addEventListener("click", async (event) => {
     if (action === "toggle-activity") { ui.activityOpen = true; render(); focusSelector(".workbench h2"); }
     if (action === "close-activity") { ui.activityOpen = false; render(); focusSelector('[data-action="toggle-activity"]'); }
     if (action === "open-relationship") { ui.view = "relationships"; ui.relationshipFilter = "all"; ui.focusRelationship = id; render(); }
-    if (action === "accept-relationship") { ui.focusRelationship = id; actions.setRelationshipStatus(id, "accepted"); ui.toast = { message: "Relationship accepted", undo: false }; render(); focusSelector(`[data-relationship-id="${CSS.escape(id)}"]`); }
-    if (action === "reject-relationship") { ui.focusRelationship = id; actions.setRelationshipStatus(id, "rejected"); ui.toast = { message: "Relationship rejected", undo: false }; render(); focusSelector(`[data-relationship-id="${CSS.escape(id)}"]`); }
+    if (action === "accept-relationship") { ui.relationshipFilter = relationshipFocusFilter(ui.relationshipFilter, "accepted"); ui.focusRelationship = id; actions.setRelationshipStatus(id, "accepted"); ui.toast = { message: "Relationship accepted", undo: false }; render(); focusSelector(`[data-relationship-id="${CSS.escape(id)}"]`); }
+    if (action === "reject-relationship") { ui.relationshipFilter = relationshipFocusFilter(ui.relationshipFilter, "rejected"); ui.focusRelationship = id; actions.setRelationshipStatus(id, "rejected"); ui.toast = { message: "Relationship rejected", undo: false }; render(); focusSelector(`[data-relationship-id="${CSS.escape(id)}"]`); }
     if (action === "evidence-from-reading") { ui.evidenceDraft = evidenceDraftFromReading(caseData, id); ui.view = "evidence"; render(); focusSelector("#evidence-url"); }
   } catch (error) { showError(error); }
 });
