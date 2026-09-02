@@ -150,6 +150,10 @@ export function setMemo(c, actor, text) {
 export function summarize(env) {
   const d = env.data;
   if (env.status !== "ok" && !d) return `indeterminate: ${env.error}`;
+  if (env.sensor === "archive") {
+    if (d.archived_url) return `archived: ${d.archived_url}`;
+    return `submitted, snapshot not confirmed (${String(env.error ?? "").split(";")[0]}); check ${d.check_url}`;
+  }
   const prefix = env.status === "ok" ? "" : `partial (${env.error}): `;
   try {
     switch (env.sensor) {

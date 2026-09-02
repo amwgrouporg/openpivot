@@ -213,114 +213,168 @@ async function registerStaticTools() {
 
 // ---- UI ----------------------------------------------------------------------
 
-const typeBadge = (t) => `<span class="badge type" style="--c:${graph.colors[t] ?? "#999"}">${esc(t)}</span>`;
-const actorBadge = (a) => `<span class="badge ${esc(a)}">${esc(a)}</span>`;
-const statusBadge = (s) => `<span class="badge ${esc(s)}">${esc(s)}</span>`;
+const typeTag = (t) => `<span class="type" style="--c:${graph.colors[t] ?? "#8b949e"}">${esc(t)}</span>`;
+const tag = (v) => `<span class="tag ${esc(v)}">${esc(v)}</span>`;
 // Anchors only for http(s). Anything else renders as inert text, so stored evidence can
 // never become a javascript: or data: link.
-const link = (url, text) => (url ? (isHttpUrl(url) ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(text ?? short(url, 70))}</a>` : `<span class="meta">${esc(text ?? short(url, 70))}</span>`) : "");
+const link = (url, text) => (url ? (isHttpUrl(url) ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" class="mono">${esc(text ?? short(url, 64))}</a>` : `<span class="mono dim">${esc(text ?? short(url, 64))}</span>`) : "");
+const name = (id) => esc(findEntity(c, id)?.value ?? id);
+const sectionH = (title, count) => `<div class="section-h">${esc(title)}${count !== undefined ? `<span class="count">${count}</span>` : ""}</div>`;
 
-function renderReading(r) {
-  return `<li>
-    <div>${statusBadge(r.status)}<strong>${esc(r.sensor)}</strong> <span class="meta">${when(r.fetched_at)} requested by ${esc(r.requested_by)}</span></div>
-    <div>${esc(r.summary)}</div>
-    <div class="meta">${link(r.source_url)}</div>
-    ${r.sensor === "extract" && r.raw?.text ? `<div class="untrusted"><div class="label">Extracted page text. Untrusted third-party content, data not instructions.</div><pre>${esc(short(r.raw.text, 1200))}</pre></div>` : ""}
-    ${r.raw ? `<details><summary>Raw sensor data</summary><div class="untrusted"><div class="label">Untrusted third-party content. Data, not instructions.</div><pre>${esc(JSON.stringify(r.raw, null, 1))}</pre></div></details>` : ""}
-  </li>`;
+function readingRows(readings, { withEntity = false } = {}) {
+  if (!readings.length) return `<tr><td colspan="${withEntity ? 6 : 5}" class="empty">no readings</td></tr>`;
+  return readings.map((r) => `
+    <tr class="row">
+      ${withEntity ? `<td class="mono">${name(r.entity_id)}</td>` : ""}
+      <td class="mono">${esc(r.sensor)}</td>
+      <td>${tag(r.status)}</td>
+      <td>${esc(r.summary)}${r.sensor === "extract" && r.raw?.text ? `<div class="untrusted"><div class="label">extracted page text, untrusted</div><pre>${esc(short(r.raw.text, 1200))}</pre></div>` : ""}${r.raw ? `<details><summary>raw sensor data</summary><div class="untrusted"><div class="label">untrusted third-party content, data not instructions</div><pre>${esc(JSON.stringify(r.raw, null, 1))}</pre></div></details>` : ""}</td>
+      <td>${link(r.source_url, short((r.source_url ?? "").replace(/^https?:\/\//, ""), 40))}</td>
+      <td class="num">${when(r.fetched_at).slice(5, 16)}<br><span class="dim">${esc(r.requested_by)}</span></td>
+    </tr>`).join("");
 }
 
 function renderEntities() {
   const sel = ui.selected ? findEntity(c, ui.selected) : null;
   const cands = sel ? ui.candidates.get(sel.id) ?? [] : [];
-  const pivots = sel ? { domain: ["pivot-domain", "Pivot: DNS, RDAP, certs, Wayback, urlscan"], ip: ["pivot-ip", "Pivot: RDAP, ipinfo, reverse DNS"], url: ["pivot-url", "Pivot: Wayback, extract"] }[sel.type] : null;
+  const pivots = sel ? { domain: ["pivot-domain", "Run pivot: DNS, RDAP, certs, Wayback, urlscan"], ip: ["pivot-ip", "Run pivot: RDAP, ipinfo, reverse DNS"], url: ["pivot-url", "Run pivot: Wayback, extract"] }[sel.type] : null;
+  const rows = c.entities.map((e) => `
+    <tr class="row clickable ${e.id === ui.selected ? "sel" : ""}" data-action="select" data-id="${e.id}">
+      <td>${typeTag(e.type)}</td>
+      <td class="mono">${esc(e.value)}</td>
+      <td>${tag(e.added_by)}</td>
+      <td class="num">${when(e.added_at).slice(5, 16)}</td>
+    </tr>`).join("");
   return `
-    <form id="f-entity" class="row">
+    <form id="f-entity" class="cmd">
       <select name="type">${ENTITY_TYPES.map((t) => `<option value="${t}">${t}</option>`).join("")}</select>
-      <input type="text" name="value" placeholder="example.com, 93.184.216.34, https://..., Acme Ltd" required>
-      <input type="text" name="notes" placeholder="notes (optional)">
-      <button class="btn" type="submit">Add</button>
+      <input type="text" name="value" class="mono grow" placeholder="example.com  |  93.184.216.34  |  https://...  |  Acme Ltd" required spellcheck="false">
+      <input type="text" name="notes" placeholder="notes" style="width:12rem">
+      <button class="btn primary" type="submit">Add</button>
     </form>
-    <h3>Entities (${c.entities.length})</h3>
-    <ul class="list">${c.entities.map((e) => `<li class="clickable ${e.id === ui.selected ? "sel" : ""}" data-action="select" data-id="${e.id}">${typeBadge(e.type)}${actorBadge(e.added_by)}<strong>${esc(e.value)}</strong>${e.notes ? `<div class="meta">${esc(short(e.notes, 160))}</div>` : ""}</li>`).join("") || '<li class="empty">Nothing on the board. Add a domain to start.</li>'}</ul>
+    <div class="section">${sectionH("Entities", c.entities.length)}
+      <table class="tbl"><colgroup><col style="width:6.5rem"><col><col style="width:5rem"><col style="width:6.5rem"></colgroup>
+        <thead><tr><th>type</th><th>value</th><th>by</th><th>added</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" class="empty">no entities. add a domain to start.</td></tr>'}</tbody></table>
+    </div>
     ${sel ? `
-      <h3>Selected: ${esc(sel.value)}</h3>
-      <div class="row">
-        ${pivots ? `<button class="btn btn-small" data-action="${pivots[0]}" data-id="${sel.id}" ${ui.busy ? "disabled" : ""}>${pivots[1]}</button>` : ""}
-        ${sel.type === "url" ? `<button class="btn btn-small btn-quiet" data-action="pivot-url-archive" data-id="${sel.id}" ${ui.busy ? "disabled" : ""}>Pivot and archive</button>` : ""}
-        <button class="btn btn-small btn-quiet" data-action="remove-entity" data-id="${sel.id}">Remove</button>
+    <div class="section">${sectionH("Inspector")}
+      <div class="props">
+        <div class="k">type</div><div class="v">${typeTag(sel.type)}</div>
+        <div class="k">value</div><div class="v">${esc(sel.value)}</div>
+        <div class="k">id</div><div class="v dim">${esc(sel.id)}</div>
+        <div class="k">added</div><div class="v">${tag(sel.added_by)} <span class="dim">${when(sel.added_at)}</span></div>
+        <div class="k">notes</div><div class="v" style="font-family:var(--sans);font-size:12px">${esc(sel.notes) || '<span class="dim">none</span>'}</div>
       </div>
-      ${cands.length ? `<h3>Candidates from the last pivot (${cands.length})</h3><ul class="list">${cands.map((x) => `<li>${typeBadge(x.type)}<strong>${esc(x.value)}</strong> <span class="meta">${esc(x.why)}</span> <button class="btn btn-small btn-quiet" data-action="add-candidate" data-type="${x.type}" data-value="${esc(x.value)}" data-why="${esc(x.why)}">Add</button></li>`).join("")}</ul>` : ""}
-      <h3>Readings for this entity</h3>
-      <ul class="list">${c.readings.filter((r) => r.entity_id === sel.id).map(renderReading).join("") || '<li class="empty">No readings yet.</li>'}</ul>
-    ` : ""}`;
+      <div class="actions-bar">
+        ${pivots ? `<button class="btn primary sm" data-action="${pivots[0]}" data-id="${sel.id}" ${ui.busy ? "disabled" : ""}>${pivots[1]}</button>` : ""}
+        ${sel.type === "url" ? `<button class="btn sm" data-action="pivot-url-archive" data-id="${sel.id}" ${ui.busy ? "disabled" : ""}>Pivot and archive</button>` : ""}
+        <span class="grow"></span>
+        <button class="btn sm danger" data-action="remove-entity" data-id="${sel.id}">Remove</button>
+      </div>
+    </div>
+    ${cands.length ? `<div class="section">${sectionH("Candidates from last pivot", cands.length)}
+      <table class="tbl"><colgroup><col style="width:6.5rem"><col><col style="width:11rem"><col style="width:4rem"></colgroup>
+        <thead><tr><th>type</th><th>value</th><th>source</th><th></th></tr></thead>
+        <tbody>${cands.map((x) => `<tr class="row"><td>${typeTag(x.type)}</td><td class="mono">${esc(x.value)}</td><td class="dim">${esc(x.why)}</td><td class="actions"><button class="btn sm" data-action="add-candidate" data-type="${x.type}" data-value="${esc(x.value)}" data-why="${esc(x.why)}">add</button></td></tr>`).join("")}</tbody></table>
+    </div>` : ""}
+    <div class="section">${sectionH("Readings", c.readings.filter((r) => r.entity_id === sel.id).length)}
+      <table class="tbl"><colgroup><col style="width:5.5rem"><col style="width:8.5rem"><col><col style="width:11rem"><col style="width:6.5rem"></colgroup>
+        <thead><tr><th>sensor</th><th>status</th><th>summary</th><th>source</th><th>fetched</th></tr></thead>
+        <tbody>${readingRows(c.readings.filter((r) => r.entity_id === sel.id))}</tbody></table>
+    </div>` : ""}`;
 }
 
 function renderLinks() {
-  const name = (id) => esc(findEntity(c, id)?.value ?? id);
   const opts = c.entities.map((e) => `<option value="${e.id}">${esc(e.type)}: ${esc(e.value)}</option>`).join("");
+  const rows = c.links.map((l) => `
+    <tr class="row">
+      <td>${tag(l.status)}</td>
+      <td class="mono">${name(l.from)}<br><span class="dim">-> ${name(l.to)}</span></td>
+      <td>${esc(l.rationale)}<div class="dim mono" style="margin-top:2px">${when(l.at).slice(5, 16)}${l.reviewed_by ? ` · ${esc(l.status)} by ${esc(l.reviewed_by)}` : ""}</div></td>
+      <td>${tag(l.asserted_by)}</td>
+      <td class="actions">
+        ${l.status !== "accepted" ? `<button class="btn sm primary" data-action="link-status" data-id="${l.id}" data-status="accepted">accept</button>` : ""}
+        ${l.status !== "rejected" ? `<button class="btn sm danger" data-action="link-status" data-id="${l.id}" data-status="rejected">reject</button>` : ""}
+      </td>
+    </tr>`).join("");
   return `
-    <form id="f-link" class="row">
+    <form id="f-link" class="cmd">
       <select name="from" required><option value="">from</option>${opts}</select>
       <select name="to" required><option value="">to</option>${opts}</select>
-      <input type="text" name="rationale" placeholder="why they are connected" required>
-      <button class="btn" type="submit">Link</button>
+      <input type="text" name="rationale" class="grow" placeholder="rationale" required>
+      <button class="btn primary" type="submit">Link</button>
     </form>
-    <h3>Links (${c.links.length})</h3>
-    <ul class="list">${c.links.map((l) => `<li>${statusBadge(l.status)}${actorBadge(l.asserted_by)}<strong>${name(l.from)}</strong> to <strong>${name(l.to)}</strong>
-      <div>${esc(l.rationale)}</div>
-      <div class="row"><span class="meta">${when(l.at)}${l.reviewed_by ? `, ${esc(l.status)} by ${esc(l.reviewed_by)}` : ""}</span>
-      ${l.status !== "accepted" ? `<button class="btn btn-small" data-action="link-status" data-id="${l.id}" data-status="accepted">Accept</button>` : ""}
-      ${l.status !== "rejected" ? `<button class="btn btn-small btn-quiet" data-action="link-status" data-id="${l.id}" data-status="rejected">Reject</button>` : ""}</div></li>`).join("") || '<li class="empty">No links. The agent proposes them; you decide.</li>'}</ul>`;
+    <div class="section">${sectionH("Links", c.links.length)}
+      <table class="tbl"><colgroup><col style="width:6rem"><col style="width:13rem"><col><col style="width:5rem"><col style="width:8.5rem"></colgroup>
+        <thead><tr><th>status</th><th>from / to</th><th>rationale</th><th>by</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5" class="empty">no links. the agent proposes them; you decide.</td></tr>'}</tbody></table>
+    </div>`;
 }
 
 function renderEvidence() {
-  const name = (id) => esc(findEntity(c, id)?.value ?? id);
+  const rows = c.evidence.map((v) => `
+    <tr class="row">
+      <td>${link(v.url)}${v.archived_url ? `<div class="dim">archived: ${link(v.archived_url, short(v.archived_url.replace(/^https?:\/\//, ""), 48))}</div>` : ""}</td>
+      <td class="mono dim">${v.entity_ids.map(name).join("<br>") || "-"}</td>
+      <td>${tag(v.added_by)}</td>
+      <td class="num">${when(v.captured_at).slice(5, 16)}</td>
+    </tr>
+    <tr class="sub"><td colspan="4"><div class="untrusted"><div class="label">quoted third-party content</div><pre>${esc(v.quote)}</pre></div></td></tr>`).join("");
   return `
-    <form id="f-evidence">
-      <div class="row"><select name="entity"><option value="">entity (optional)</option>${c.entities.map((e) => `<option value="${e.id}">${esc(e.type)}: ${esc(e.value)}</option>`).join("")}</select>
-      <input type="text" name="url" placeholder="source URL" required>
-      <label class="meta"><input type="checkbox" name="archive"> archive</label></div>
-      <div class="row"><input type="text" name="quote" placeholder="verbatim quote" required><button class="btn" type="submit">Attach</button></div>
+    <form id="f-evidence" class="cmd" style="flex-wrap:wrap">
+      <select name="entity"><option value="">entity</option>${c.entities.map((e) => `<option value="${e.id}">${esc(e.type)}: ${esc(e.value)}</option>`).join("")}</select>
+      <input type="text" name="url" class="mono grow" placeholder="source URL" required spellcheck="false">
+      <label class="chk"><input type="checkbox" name="archive"> archive</label>
+      <input type="text" name="quote" class="grow" placeholder="verbatim quote" required style="flex-basis:100%">
+      <button class="btn primary" type="submit">Attach</button>
     </form>
-    <h3>Evidence (${c.evidence.length})</h3>
-    <ul class="list">${c.evidence.map((v) => `<li>${actorBadge(v.added_by)}${link(v.url)} <span class="meta">${when(v.captured_at)}</span>
-      ${v.archived_url ? `<div class="meta">archived: ${link(v.archived_url)}</div>` : ""}
-      <div class="meta">entities: ${v.entity_ids.map(name).join(", ") || "none"}</div>
-      <div class="untrusted"><div class="label">Quoted third-party content</div><pre>${esc(v.quote)}</pre></div></li>`).join("") || '<li class="empty">No evidence attached.</li>'}</ul>`;
+    <div class="section">${sectionH("Evidence", c.evidence.length)}
+      <table class="tbl"><colgroup><col><col style="width:11rem"><col style="width:5rem"><col style="width:6.5rem"></colgroup>
+        <thead><tr><th>source</th><th>entities</th><th>by</th><th>captured</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" class="empty">no evidence attached</td></tr>'}</tbody></table>
+    </div>`;
 }
 
 function renderReadings() {
-  const name = (id) => esc(findEntity(c, id)?.value ?? id);
-  return `<h3>All readings (${c.readings.length})</h3><ul class="list">${c.readings.map((r) => `<li><div class="meta">${name(r.entity_id)}</div>${renderReading(r).replace(/^<li>|<\/li>$/g, "")}</li>`).join("") || '<li class="empty">No readings yet.</li>'}</ul>`;
+  return `<div class="section">${sectionH("All readings", c.readings.length)}
+    <table class="tbl"><colgroup><col style="width:9rem"><col style="width:5.5rem"><col style="width:8.5rem"><col><col style="width:10rem"><col style="width:6.5rem"></colgroup>
+      <thead><tr><th>entity</th><th>sensor</th><th>status</th><th>summary</th><th>source</th><th>fetched</th></tr></thead>
+      <tbody>${readingRows(c.readings, { withEntity: true })}</tbody></table>
+  </div>`;
 }
 
 function renderMemo() {
   return `
-    <h3>Analyst</h3>
-    <textarea id="memo-human" placeholder="Your findings. Only you write here.">${esc(c.memo.human)}</textarea>
-    <h3>Agent ${c.memo.agent_updated_at ? `<span class="meta">updated ${when(c.memo.agent_updated_at)}</span>` : ""}</h3>
-    <div class="untrusted"><div class="label">Written by the agent through write_memo</div><pre>${esc(c.memo.agent || "(empty)")}</pre></div>`;
+    <div class="section">${sectionH("Analyst")}
+      <textarea id="memo-human" placeholder="Your findings. Only you write here." spellcheck="true">${esc(c.memo.human)}</textarea>
+    </div>
+    <div class="section">${sectionH(`Agent${c.memo.agent_updated_at ? ` · updated ${when(c.memo.agent_updated_at)}` : ""}`)}
+      <div class="untrusted"><div class="label">written by the agent through write_memo</div><div class="body" style="white-space:pre-wrap">${esc(c.memo.agent || "(empty)")}</div></div>
+    </div>`;
 }
 
 function renderLog() {
-  return `<h3>Log</h3><ul class="list">${c.log.map((l) => `<li>${actorBadge(l.actor)}<strong>${esc(l.action)}</strong> ${esc(l.detail)} <span class="meta">${when(l.ts)}</span></li>`).join("") || '<li class="empty">Empty.</li>'}</ul>`;
+  return `<div class="section">${sectionH("Log", c.log.length)}
+    <table class="tbl"><colgroup><col style="width:9rem"><col style="width:5rem"><col style="width:8rem"><col></colgroup>
+      <thead><tr><th>time</th><th>actor</th><th>action</th><th>detail</th></tr></thead>
+      <tbody>${c.log.map((l) => `<tr class="row"><td class="num">${when(l.ts).slice(5)}</td><td>${tag(l.actor)}</td><td class="mono">${esc(l.action)}</td><td class="dim">${esc(l.detail)}</td></tr>`).join("") || '<tr><td colspan="4" class="empty">empty</td></tr>'}</tbody></table>
+  </div>`;
 }
 
 function render() {
   $("#case-title").value = c.title;
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === ui.tab));
-  const body = $("#panel-body");
-  body.classList.toggle("busy", ui.busy > 0);
-  body.innerHTML = { entities: renderEntities, links: renderLinks, evidence: renderEvidence, readings: renderReadings, memo: renderMemo, log: renderLog }[ui.tab]();
-  $("#legend").innerHTML = Object.entries(graph.colors).map(([t, col]) => `<span style="--c:${col}">${t}</span>`).join("") + '<span style="--c:transparent;border:1px dashed #94a3b8;border-radius:50%">dashed ring: added by agent</span>' + (graph.unavailable ? '<span style="--c:#ef4444">graph library did not load; board and tools still work</span>' : "");
-  const pill = $("#mcp-status");
-  if (!mc) { pill.textContent = "WebMCP unavailable"; pill.className = "pill off"; }
-  else { pill.textContent = `WebMCP: ${registry.names().length} tools`; pill.className = "pill on"; }
+  document.querySelectorAll("#tabs .count").forEach((el) => { const n = c[el.dataset.count]?.length ?? 0; el.textContent = n ? String(n) : ""; });
+  document.body.classList.toggle("busy", ui.busy > 0);
+  $("#panel-body").innerHTML = { entities: renderEntities, links: renderLinks, evidence: renderEvidence, readings: renderReadings, memo: renderMemo, log: renderLog }[ui.tab]();
+  $("#stats").innerHTML = `<b>${c.entities.length}</b> entities · <b>${c.links.filter((l) => l.status === "accepted").length}</b>/${c.links.length} links · <b>${c.evidence.length}</b> evidence · <b>${c.readings.length}</b> readings`;
+  $("#legend").innerHTML = Object.entries(graph.colors).map(([t, col]) => `<span style="--c:${col}">${t}</span>`).join("") + '<span class="note">agent-added</span>' + (graph.unavailable ? '<span class="warn">graph library missing; tools still work</span>' : "");
+  $("#canvas-empty").hidden = c.entities.length > 0;
   $("#foot").innerHTML = mc
-    ? `Tools registered: <code>${registry.names().join(", ")}</code>. Pivot tools appear when an entity of their type is on the board.`
-    : `WebMCP is not available in this browser. Open this page in the ChatGPT desktop browser, or in Chrome 149+ with <code>chrome://flags/#enable-webmcp-testing</code> enabled and the browser relaunched.`;
-  $("#btn-new").textContent = ui.confirmNew ? "Click again to discard this case" : "New case";
+    ? `<span class="tools">tools ${registry.names().length}: ${registry.names().join(", ")}</span><span class="state on">WebMCP ready · document.modelContext</span>`
+    : `<span class="tools">WebMCP not available: open in the ChatGPT desktop browser, or Chrome 149+ with chrome://flags/#enable-webmcp-testing and relaunch</span><span class="state">WebMCP unavailable</span>`;
+  $("#btn-new").textContent = ui.confirmNew ? "Click again to discard" : "New case";
   graph.select(ui.selected);
   graph.update(c);
 }
@@ -382,11 +436,18 @@ document.getElementById("panel-body").addEventListener("focusout", (ev) => { if 
 function alertInline(msg) {
   const body = $("#panel-body");
   const div = document.createElement("div");
-  div.className = "untrusted";
-  div.textContent = `Error: ${msg}`;
+  div.className = "notice";
+  div.textContent = `error: ${msg}`;
   body.prepend(div);
   setTimeout(() => div.remove(), 5000);
 }
+
+document.querySelector(".canvas-toolbar").addEventListener("click", (ev) => {
+  const op = ev.target.closest("[data-graph]")?.dataset.graph;
+  if (op === "fit") graph.fit();
+  if (op === "in") graph.zoom(1.3);
+  if (op === "out") graph.zoom(1 / 1.3);
+});
 
 window.addEventListener("resize", () => graph.update(c));
 registry.onChange(() => render());

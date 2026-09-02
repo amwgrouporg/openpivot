@@ -8,32 +8,41 @@
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<header class="top">
-  <div class="brand">OpenPivot</div>
-  <input id="case-title" class="title" type="text" aria-label="Case title" placeholder="Case title">
-  <div class="spacer"></div>
-  <span id="mcp-status" class="pill">WebMCP: checking</span>
-  <button id="btn-export" class="btn">Export case</button>
-  <button id="btn-new" class="btn btn-quiet">New case</button>
+<header class="topbar">
+  <div class="brand"><span class="mark">OP</span><span>OpenPivot</span></div>
+  <div class="sep"></div>
+  <input id="case-title" class="case-title" type="text" aria-label="Case title" placeholder="Case title" spellcheck="false">
+  <div class="grow"></div>
+  <div class="stats" id="stats"></div>
+  <div class="sep"></div>
+  <button id="btn-export" class="btn">Export</button>
+  <button id="btn-new" class="btn">New case</button>
 </header>
-<main class="layout">
-  <section class="graph-wrap">
+<main class="workspace">
+  <section class="canvas">
+    <div class="canvas-toolbar">
+      <button class="btn" data-graph="fit" title="Fit to view">fit</button>
+      <button class="btn" data-graph="in" title="Zoom in">+</button>
+      <button class="btn" data-graph="out" title="Zoom out">-</button>
+      <span class="grow"></span>
+      <div class="legend" id="legend"></div>
+    </div>
     <svg id="graph" role="img" aria-label="Entity graph"></svg>
-    <div class="legend" id="legend"></div>
+    <div class="canvas-empty" id="canvas-empty" hidden>no entities on the board</div>
   </section>
-  <section class="panel">
+  <section class="inspector">
     <nav class="tabs" id="tabs">
-      <button data-tab="entities">Entities</button>
-      <button data-tab="links">Links</button>
-      <button data-tab="evidence">Evidence</button>
-      <button data-tab="readings">Readings</button>
+      <button data-tab="entities">Entities<span class="count" data-count="entities"></span></button>
+      <button data-tab="links">Links<span class="count" data-count="links"></span></button>
+      <button data-tab="evidence">Evidence<span class="count" data-count="evidence"></span></button>
+      <button data-tab="readings">Readings<span class="count" data-count="readings"></span></button>
       <button data-tab="memo">Memo</button>
       <button data-tab="log">Log</button>
     </nav>
     <div id="panel-body" class="panel-body"></div>
   </section>
 </main>
-<footer class="foot" id="foot"></footer>
+<footer class="statusbar" id="foot"></footer>
 <script src="/vendor/d3.v7.9.0.min.js"></script>
 <script type="module" src="/app.js"></script>
 </body>
