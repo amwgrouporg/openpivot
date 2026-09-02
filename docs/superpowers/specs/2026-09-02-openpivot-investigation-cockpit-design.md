@@ -210,11 +210,11 @@ The storage boundary becomes:
 CaseRepository.load()
 CaseRepository.save(caseData)
 CaseRepository.create(title)
-CaseRepository.import(markdownOrJson)
-CaseRepository.export(caseData)
+CaseRepository.importJson(text)
+CaseRepository.exportJson(caseData)
 ```
 
-Only `LocalCaseRepository` is implemented now. No networked repository is included.
+Only `LocalCaseRepository` is implemented now. Markdown remains the human-readable case export; JSON is the lossless round-trip format. No networked repository is included.
 
 ## WebMCP compatibility
 
