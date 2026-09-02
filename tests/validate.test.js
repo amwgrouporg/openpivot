@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { normalizeHostname, normalizeIp, parseHttpUrl, isPrivateIPv4, clampInt, shortText } from "../src/validate.js";
+import { candidatesFrom, newCase } from "../public/store.js";
 
 test("hostnames normalise and reject junk", () => {
   assert.equal(normalizeHostname("Example.COM."), "example.com");
@@ -45,4 +46,13 @@ test("clampInt and shortText", () => {
   assert.equal(shortText("  hi  ", 10), "hi");
   assert.equal(shortText("", 10), null);
   assert.equal(shortText("x".repeat(20), 5), "xxxxx");
+});
+
+test("candidate generation excludes selectors the board cannot add", () => {
+  const caseData = newCase("Candidates");
+  const entity = { id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" };
+  caseData.entities.push(entity);
+  const envelope = { sensor: "certs", data: { distinct_names: ["www.example.com", "user@example.com", "not a host"] } };
+
+  assert.deepEqual(candidatesFrom(caseData, entity, envelope), [{ type: "domain", value: "www.example.com", why: "name on a certificate" }]);
 });

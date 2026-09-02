@@ -49,11 +49,15 @@ a { color: inherit; }
 ::selection { background: rgba(105, 169, 255, .28); }
 
 .app-shell {
+  position: fixed;
+  inset: 0;
   display: grid;
   grid-template-columns: var(--rail) minmax(0, 1fr);
   grid-template-rows: var(--topbar) minmax(0, 1fr) var(--status);
   width: 100%;
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
   background: radial-gradient(circle at 38% 8%, rgba(40, 91, 150, .08), transparent 36%), var(--ink-0);
 }
 
@@ -304,6 +308,10 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
 .source-record p { margin: 0; color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @media (max-width: 1000px) {
+  .workspace-frame { position: relative; grid-template-columns: 1fr !important; }
+  .workbench.is-open { position: absolute; z-index: 35; inset: 0 0 0 auto; width: min(390px, calc(100% - 64px)); }
+  .page-header { align-items: flex-start; flex-direction: column; }
+  .page-actions { width: 100%; flex-wrap: wrap; }
   .composer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .composer-grid .field--wide { grid-column: 1 / -1; }
   .report-grid { grid-template-columns: 1fr; }

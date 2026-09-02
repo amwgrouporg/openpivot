@@ -58,20 +58,23 @@ extraction. Case state lives in the browser; nothing is stored server-side.
 ## Video script (three minutes)
 
 0:00 Title card. "Agents should not read registries by screenshot."
-0:10 The board, empty. Say what it is in one sentence. Point at "WebMCP: 10 tools".
+0:10 The Overview, empty. Say what it is in one sentence. Point at "10 site tools ready".
 0:20 In ChatGPT (or the Chrome inspector): "Add example.com to the case and pivot on it."
      Show add_entity, then the tool count ticking to 11 as pivot_domain appears. Show the
-     pivot running and the readings landing: DNS, RDAP, certs, Wayback, urlscan, each with a
-     status badge and source link.
+     pivot running in the entity workbench and the per-sensor states landing: DNS, RDAP,
+     certs, Wayback, urlscan, each with a status badge and source link.
 0:55 Agent: "Add the A record IP and pivot on it, then propose the link." Show pivot_ip and
-     the proposed link appearing dashed on the graph. Human clicks Accept. Line goes solid.
+     the proposed link appearing dashed on the graph and in the Relationships review queue.
+     Human clicks Accept. The line goes solid and the cited DNS reading stays on the card.
 1:20 Agent proposes a second, weaker link (a urlscan page IP from an unrelated scan). Human
      reads the rationale, clicks Reject. Say why: the human owns the verdict.
 1:40 Agent: "Add https://openpivot.edge-4q7m9x2k.workers.dev/demo/injected as a url and pivot
-     on it with archive." Show pivot_url appear, then the extract reading land in the untrusted
-     panel with the hidden "SYSTEM NOTICE TO AI AGENTS" text visible. Agent attaches a quote as
-     evidence. Show the archived URL on the evidence card.
-2:15 Agent writes its memo section. Human types two lines in the analyst section.
+     on it with archive." Show pivot_url appear, then the extract reading land in the entity
+     workbench's isolated untrusted-source panel with the hidden "SYSTEM NOTICE TO AI AGENTS"
+     text visible. Agent attaches a quote as evidence. Open Evidence and show the source,
+     exact quote, linked entity and archive state together.
+2:15 Open Report. Agent writes its clearly labelled draft; human types two lines in the
+     separate analyst conclusions section.
 2:35 Export. Open the markdown: entities, links with who asserted them, evidence with
      capture times, readings with source URLs, both memo sections, log.
 2:50 Close: "Every hop provenanced. The agent runs the chain. The human keeps the ledger."

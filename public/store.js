@@ -260,6 +260,7 @@ export function candidatesFrom(c, entity, env) {
   const out = [];
   const add = (type, value, why) => {
     const v = normalizeValue(type, value);
+    try { validateValue(type, v); } catch { return; }
     if (!v || v === entity.value || have.has(`${type}:${v}`)) return;
     if (out.some((x) => x.type === type && x.value === v)) return;
     out.push({ type, value: v, why });
