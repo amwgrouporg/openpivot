@@ -1,4 +1,4 @@
-import { addEntity, addLink, dismissCandidate, findEntity, removeEntity, restoreCandidate, restoreRemoval, setLinkStatus } from "../store.js";
+import { addEntity, addEvidence, addLink, dismissCandidate, findEntity, removeEntity, restoreCandidate, restoreRemoval, setLinkStatus, setMemo } from "../store.js";
 
 export function createCaseActions({ getCase, persist, setUi, runEntityPivot }) {
   let removalSnapshot = null;
@@ -51,6 +51,21 @@ export function createCaseActions({ getCase, persist, setUi, runEntityPivot }) {
       const link = setLinkStatus(getCase(), id, status, "human");
       save();
       return link;
+    },
+    createRelationship(input) {
+      const result = addLink(getCase(), input, "human", "proposed");
+      save();
+      return result.link;
+    },
+    attachEvidence(input) {
+      const evidence = addEvidence(getCase(), input, "human");
+      save();
+      return evidence;
+    },
+    saveAnalystMemo(text) {
+      setMemo(getCase(), "human", text);
+      save();
+      return getCase().memo.human;
     },
     removeEntity(id) {
       removalSnapshot = removeEntity(getCase(), id, "human");

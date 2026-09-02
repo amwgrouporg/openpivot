@@ -251,6 +251,64 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
 .activity-entry strong { display: block; color: var(--text-soft); font: 10px var(--mono); }
 .activity-entry span { color: var(--muted); font-size: 11px; }
 
+.filter-control { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.filter-control select { min-width: 128px; }
+.relationship-composer, .evidence-composer { margin-bottom: 20px; }
+.composer-grid { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(150px, .8fr) minmax(220px, 1.7fr) auto; gap: 8px; align-items: end; }
+.relationship-list, .evidence-list, .report-sources { margin-top: 22px; }
+.relationship-card { position: relative; overflow: hidden; }
+.relationship-status-line { position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--amber); }
+.relationship-status-line--accepted { background: var(--green); }
+.relationship-status-line--rejected { background: var(--red); }
+.relationship-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.relationship-card .relationship-route { flex: 1; margin: 0; }
+.relationship-card .relationship-route > span { display: grid; gap: 5px; min-width: 0; }
+.rationale { margin: 16px 0 10px; }
+.rationale p { margin: 5px 0 0; color: var(--text); font-size: 13px; }
+.citation-list { display: grid; gap: 6px; margin-top: 10px; }
+.citation { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(4,13,23,.38); }
+.citation p { margin: 3px 0 0; color: var(--text-soft); font-size: 11px; }
+.citation--missing { color: var(--red); }
+.uncited-note { padding: 9px 10px; border: 1px dashed var(--paper-line); border-radius: 8px; color: var(--amber); font-size: 11px; }
+.relationship-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.review-actions { display: flex; gap: 7px; }
+
+.evidence-form-grid { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(260px, 1.3fr); gap: 10px; }
+.field--quote { grid-column: 1 / -1; }
+.evidence-form-grid select[multiple] { min-height: 82px; }
+.composer-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 11px; }
+.checkbox { display: inline-flex; align-items: center; gap: 8px; color: var(--text-soft); }
+.checkbox input { accent-color: var(--blue); }
+.evidence-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.evidence-card-head > div { display: grid; gap: 5px; }
+.captured-time { color: var(--muted); font-size: 10px; }
+.evidence-card blockquote { margin: 15px 0; padding: 13px 15px; border: 0; border-left: 3px solid var(--amber); border-radius: 0 7px 7px 0; background: rgba(239,189,88,.07); color: #f1dfb5; font: 12px/1.6 var(--mono); }
+.evidence-entities { display: flex; flex-wrap: wrap; gap: 8px; }
+.evidence-entities > span { display: inline-flex; align-items: center; gap: 7px; }
+.archive-state { display: flex; align-items: center; gap: 7px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+.archive-state--ok { color: var(--green); }
+.archive-state .icon { width: 13px; height: 13px; }
+
+.report-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.section-intro { margin: -3px 0 12px; color: var(--muted); font-size: 11px; }
+.report-editor textarea { min-height: 330px; background: rgba(4,13,23,.58); }
+.memo-state { margin-top: 8px; color: var(--faint); font-size: 9px; text-align: right; }
+.agent-draft { border-color: rgba(193,154,255,.22); }
+.agent-draft-head { display: flex; justify-content: space-between; gap: 12px; }
+.draft-warning { display: flex; align-items: flex-start; gap: 9px; margin: 8px 0 13px; padding: 10px; border: 1px solid var(--paper-line); border-radius: 8px; background: var(--amber-wash); color: var(--paper-text); font-size: 11px; }
+.draft-warning .icon { width: 14px; color: var(--amber); }
+.agent-prose { min-height: 260px; max-height: 440px; overflow: auto; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: rgba(4,13,23,.5); color: var(--text-soft); white-space: pre-wrap; line-height: 1.65; }
+.source-list { display: grid; gap: 6px; }
+.source-record { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: rgba(15,30,47,.62); }
+.source-record > div { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.source-record p { margin: 0; color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 1000px) {
+  .composer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .composer-grid .field--wide { grid-column: 1 / -1; }
+  .report-grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 1179px) {
   :root { --rail: 64px; }
   .topbar { grid-template-columns: var(--rail) minmax(150px, 1fr) auto auto; }
@@ -302,6 +360,15 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
   .entity-list { max-height: 260px; }
   .entity-add .field:nth-child(2) { grid-template-columns: 1fr; }
   .sensor-grid { grid-template-columns: 1fr; }
+  .composer-grid, .evidence-form-grid { grid-template-columns: 1fr; }
+  .composer-grid .field--wide, .field--quote { grid-column: 1; }
+  .relationship-card-head, .relationship-card-foot, .evidence-card-head, .composer-footer, .source-record { align-items: stretch; flex-direction: column; }
+  .relationship-card .relationship-route { grid-template-columns: 1fr; }
+  .relationship-card .relationship-route > .icon { transform: rotate(90deg); }
+  .review-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .report-view .page-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .report-view .page-actions .button--primary { grid-column: 1 / -1; }
+  .source-record p { white-space: normal; }
   .form-row { grid-template-columns: 1fr; }
   .button { min-height: 40px; }
   .notice { margin: 10px 14px 0; }

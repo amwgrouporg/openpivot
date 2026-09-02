@@ -5,6 +5,9 @@ import { renderShell } from "../public/ui/shell.js";
 import { renderOverview } from "../public/ui/overview.js";
 import { renderEntities } from "../public/ui/entities.js";
 import { createCaseActions } from "../public/ui/events.js";
+import { renderRelationships } from "../public/ui/relationships.js";
+import { renderEvidence } from "../public/ui/evidence.js";
+import { renderReport } from "../public/ui/report.js";
 import { newCase } from "../public/store.js";
 
 test("safe links expose http destinations and neutralize executable protocols", () => {
@@ -36,6 +39,9 @@ test("shell exposes five destinations and identifies the active view", () => {
 
   for (const view of ["overview", "entities", "relationships", "evidence", "report"]) {
     assert.match(html, new RegExp(`data-view-action="${view}"`));
+  }
+  for (const label of ["Overview", "Entities", "Relationships", "Evidence", "Report"]) {
+    assert.match(html, new RegExp(`aria-label="${label}"`));
   }
   assert.match(html, /data-view-action="overview"[^>]*aria-current="page"/);
   assert.match(html, /data-main-surface/);
@@ -116,4 +122,59 @@ test("add-and-propose candidate never bypasses human review", () => {
   assert.equal(caseData.links.length, 1);
   assert.equal(caseData.links[0].status, "proposed");
   assert.equal(caseData.links[0].asserted_by, "human");
+});
+
+test("proposed relationship card exposes rationale, citation, and both review choices", () => {
+  const caseData = newCase("Review");
+  caseData.entities = [
+    { id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" },
+    { id: "ent_2", type: "ip", value: "192.0.2.1", notes: "", added_by: "agent", added_at: "2026-09-01T10:01:00.000Z" },
+  ];
+  caseData.readings = [{ id: "rdg_1", entity_id: "ent_1", sensor: "dns", status: "ok", summary: "A 192.0.2.1", source_url: "https://cloudflare-dns.com/dns-query?name=example.com", fetched_at: "2026-09-01T10:02:00.000Z", requested_by: "agent", raw: {}, untrusted: true }];
+  caseData.links = [{ id: "lnk_1", from: "ent_1", to: "ent_2", rationale: "DNS A record", asserted_by: "agent", status: "proposed", at: "2026-09-01T10:03:00.000Z", citations: [{ kind: "reading", id: "rdg_1" }] }];
+
+  const html = renderRelationships({ caseData, statusFilter: "all" });
+
+  assert.match(html, /DNS A record/);
+  assert.match(html, /cloudflare-dns\.com/);
+  assert.match(html, /data-action="accept-relationship"/);
+  assert.match(html, /data-action="reject-relationship"/);
+});
+
+test("evidence draft prefills provenance while leaving the exact quote empty", () => {
+  const caseData = newCase("Evidence");
+  caseData.entities.push({ id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
+  const html = renderEvidence({ caseData, draft: { reading_id: "rdg_1", entity_ids: ["ent_1"], url: "https://example.com/source", quote: "", archive: false } });
+
+  assert.match(html, /value="https:\/\/example\.com\/source"/);
+  assert.match(html, /name="quote"[^>]*><\/textarea>/);
+  assert.match(html, /value="ent_1" selected/);
+});
+
+test("report keeps analyst editing separate from the agent draft and sources", () => {
+  const caseData = newCase("Report");
+  caseData.memo.agent = "Agent finding";
+  caseData.readings.push({ id: "rdg_1", entity_id: "ent_1", sensor: "dns", status: "ok", summary: "A 192.0.2.1", source_url: "https://example.com/source", fetched_at: "2026-09-01T10:00:00.000Z", requested_by: "agent", raw: {}, untrusted: true });
+
+  const html = renderReport({ caseData });
+
+  assert.match(html, /id="memo-human"/);
+  assert.match(html, /Unreviewed agent draft/);
+  assert.match(html, /Agent finding/);
+  assert.match(html, /example\.com\/source/);
+});
+
+test("case actions attach evidence and save only the analyst memo", () => {
+  const caseData = newCase("Actions");
+  caseData.entities.push({ id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
+  caseData.readings.push({ id: "rdg_1", entity_id: "ent_1", sensor: "rdap", status: "ok", summary: "registered", source_url: "https://example.com/rdap", fetched_at: "2026-09-01T10:00:00.000Z", requested_by: "agent", raw: {}, untrusted: true });
+  const actions = createCaseActions({ getCase: () => caseData, persist() {}, setUi() {}, runEntityPivot: async () => ({}) });
+
+  actions.attachEvidence({ entity_ids: ["ent_1"], url: "https://example.com/rdap", quote: "registration 1995-08-14", reading_id: "rdg_1", archived_url: null });
+  actions.saveAnalystMemo("Analyst conclusion");
+
+  assert.equal(caseData.evidence.length, 1);
+  assert.equal(caseData.evidence[0].reading_id, "rdg_1");
+  assert.equal(caseData.memo.human, "Analyst conclusion");
+  assert.equal(caseData.memo.agent, "");
 });

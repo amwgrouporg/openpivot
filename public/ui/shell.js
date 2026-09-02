@@ -12,7 +12,7 @@ function navigation(activeView, counts, className) {
   return `<nav class="${className}" aria-label="Case navigation" data-primary-nav>${PRIMARY_VIEWS.map((view) => {
     const active = view.id === activeView;
     const count = Number(counts?.[view.id] ?? 0);
-    return `<button class="nav-item${active ? " is-active" : ""}" type="button" data-view-action="${view.id}"${active ? ' aria-current="page"' : ""}>${icon(view.icon)}<span class="nav-label">${view.label}</span>${count ? `<span class="nav-count">${count}</span>` : ""}</button>`;
+    return `<button class="nav-item${active ? " is-active" : ""}" type="button" data-view-action="${view.id}" aria-label="${view.label}"${active ? ' aria-current="page"' : ""}>${icon(view.icon)}<span class="nav-label">${view.label}</span>${count ? `<span class="nav-count">${count}</span>` : ""}</button>`;
   }).join("")}</nav>`;
 }
 

@@ -13,6 +13,9 @@ import { renderShell } from "./ui/shell.js";
 import { renderOverview } from "./ui/overview.js";
 import { renderEntities } from "./ui/entities.js";
 import { createCaseActions, parseCandidate } from "./ui/events.js";
+import { renderRelationships } from "./ui/relationships.js";
+import { renderEvidence } from "./ui/evidence.js";
+import { renderReport } from "./ui/report.js";
 
 const app = document.getElementById("app");
 const repository = createLocalCaseRepository(localStorage);
@@ -32,6 +35,7 @@ const ui = {
   toast: null,
   activityOpen: false,
   evidenceDraft: null,
+  relationshipFilter: "all",
 };
 
 function hydrateCandidates() {
@@ -150,9 +154,9 @@ function activeContent(queue, webmcpState) {
     const selected = ui.selected ? findEntity(caseData, ui.selected) : null;
     return renderEntities({ caseData, selected, candidates: selected ? visibleCandidates(caseData, ui.candidates, selected.id) : [], activeRun: ui.activeRun });
   }
-  if (ui.view === "relationships") return { contentHtml: placeholder("Relationships", "Review agent-proposed connections and the sources that support them."), workbenchHtml: "" };
-  if (ui.view === "evidence") return { contentHtml: placeholder("Evidence", "Capture exact quotes and keep every source attached to the entities it supports."), workbenchHtml: "" };
-  return { contentHtml: placeholder("Report", "Bring analyst judgment, agent research, and cited sources into one exportable memo."), workbenchHtml: "" };
+  if (ui.view === "relationships") return { contentHtml: renderRelationships({ caseData, statusFilter: ui.relationshipFilter }), workbenchHtml: "" };
+  if (ui.view === "evidence") return { contentHtml: renderEvidence({ caseData, draft: ui.evidenceDraft }), workbenchHtml: "" };
+  return { contentHtml: renderReport({ caseData }), workbenchHtml: "" };
 }
 
 function render() {
@@ -197,19 +201,63 @@ function showError(error) {
   render();
 }
 
-app.addEventListener("submit", (event) => {
-  const form = event.target.closest("[data-form='add-entity']");
+app.addEventListener("submit", async (event) => {
+  const form = event.target.closest("[data-form]");
   if (!form) return;
   event.preventDefault();
-  const data = Object.fromEntries(new FormData(form).entries());
-  try { actions.addEntity({ type: data.type, value: data.value, notes: data.notes }); }
+  const formData = new FormData(form);
+  const data = Object.fromEntries(formData.entries());
+  try {
+    if (form.dataset.form === "add-entity") actions.addEntity({ type: data.type, value: data.value, notes: data.notes });
+    if (form.dataset.form === "add-relationship") {
+      actions.createRelationship({ from: data.from, to: data.to, rationale: data.rationale, citations: [] });
+      ui.toast = { message: "Relationship added to the review queue", undo: false };
+      render();
+    }
+    if (form.dataset.form === "attach-evidence") {
+      const archivedUrl = data.archive ? await archiveUrl(data.url) : null;
+      actions.attachEvidence({ entity_ids: formData.getAll("entity_ids"), url: data.url, quote: data.quote, reading_id: data.reading_id || null, archived_url: archivedUrl });
+      ui.evidenceDraft = null;
+      ui.toast = { message: data.archive && !archivedUrl ? "Evidence attached; archive confirmation is pending" : "Evidence attached", undo: false };
+      render();
+    }
+  }
   catch (error) { showError(error); }
 });
 
 app.addEventListener("change", (event) => {
-  if (event.target.id !== "case-title") return;
-  caseData.title = event.target.value.trim() || "Untitled case";
-  log(caseData, "human", "rename_case", caseData.title);
+  if (event.target.id === "case-title") {
+    caseData.title = event.target.value.trim() || "Untitled case";
+    log(caseData, "human", "rename_case", caseData.title);
+    persist();
+  }
+  if (event.target.dataset.control === "relationship-filter") {
+    ui.relationshipFilter = event.target.value;
+    render();
+  }
+  if (event.target.dataset.action === "import-json") {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    file.text().then((text) => {
+      caseData = repository.importJson(text);
+      ui.selected = caseData.ui.selected_entity_id;
+      ui.view = "overview";
+      ui.evidenceDraft = null;
+      hydrateCandidates();
+      persist();
+    }).catch(showError);
+  }
+});
+
+app.addEventListener("input", (event) => {
+  if (event.target.id !== "memo-human") return;
+  caseData.memo.human = event.target.value;
+  repository.save(caseData);
+});
+
+app.addEventListener("focusout", (event) => {
+  if (event.target.id !== "memo-human") return;
+  log(caseData, "human", "write_memo", `${caseData.memo.human.length} chars`);
   persist();
 });
 
@@ -240,6 +288,10 @@ app.addEventListener("click", async (event) => {
       log(caseData, "human", "export_case", filename);
       persist();
     }
+    if (action === "export-json") {
+      const filename = `${caseData.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "case"}.json`;
+      download(repository.exportJson(caseData), "application/json", filename);
+    }
     if (action === "new-case") { ui.modal = { kind: "new-case" }; render(); }
     if (action === "confirm-new-case") { caseData = repository.create(); ui.selected = null; ui.candidates.clear(); ui.modal = null; ui.view = "overview"; persist(); }
     if (action === "cancel-modal") { ui.modal = null; render(); }
@@ -267,7 +319,9 @@ app.addEventListener("click", async (event) => {
     if (action === "dismiss-notice") { ui.notice = ""; render(); }
     if (action === "toggle-activity") { ui.activityOpen = true; render(); }
     if (action === "close-activity") { ui.activityOpen = false; render(); }
-    if (action === "open-relationship") { ui.view = "relationships"; render(); }
+    if (action === "open-relationship") { ui.view = "relationships"; ui.relationshipFilter = "proposed"; render(); }
+    if (action === "accept-relationship") { actions.setRelationshipStatus(id, "accepted"); ui.toast = { message: "Relationship accepted", undo: false }; render(); }
+    if (action === "reject-relationship") { actions.setRelationshipStatus(id, "rejected"); ui.toast = { message: "Relationship rejected", undo: false }; render(); }
     if (action === "evidence-from-reading") { ui.evidenceDraft = evidenceDraftFromReading(caseData, id); ui.view = "evidence"; render(); }
   } catch (error) { showError(error); }
 });
