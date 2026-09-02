@@ -1,0 +1,101 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createToolset } from "../public/tools.js";
+import { newCase } from "../public/store.js";
+
+function registryDouble() {
+  const tools = new Map();
+  return {
+    register: async (tool) => { tools.set(tool.name, tool); return true; },
+    unregister: (name) => tools.delete(name),
+    has: (name) => tools.has(name),
+    names: () => [...tools.keys()],
+    tools,
+  };
+}
+
+function harness(caseData = newCase("Tools")) {
+  const registry = registryDouble();
+  const selected = [];
+  const candidateSets = [];
+  const toolset = createToolset({
+    getCase: () => caseData,
+    persist() {},
+    registry,
+    async archiveUrl() { return null; },
+    async runEntityPivot(entity, type, archive) { return { entity, readings: [], candidates: [], type, archive }; },
+    onSelect: (id) => selected.push(id),
+    onCandidates: (id, candidates) => candidateSets.push([id, candidates]),
+  });
+  return { caseData, registry, selected, candidateSets, toolset };
+}
+
+test("an empty case registers the original ten tools in order", async () => {
+  const { registry, toolset } = harness();
+  await toolset.registerStaticTools();
+
+  assert.deepEqual(registry.names(), [
+    "read_case",
+    "add_entity",
+    "link_entities",
+    "attach_evidence",
+    "search_web",
+    "lookup_wikidata",
+    "extract_page",
+    "build_queries",
+    "write_memo",
+    "export_case",
+  ]);
+});
+
+test("adding the first domain exposes pivot_domain as tool eleven", async () => {
+  const { caseData, registry, toolset } = harness();
+  await toolset.registerStaticTools();
+  const addEntity = registry.tools.get("add_entity");
+
+  await addEntity.execute({ type: "domain", value: "example.com" });
+  await toolset.syncDynamicTools();
+
+  assert.equal(registry.names().length, 11);
+  assert.equal(registry.names().at(-1), "pivot_domain");
+  assert.equal(caseData.entities[0].value, "example.com");
+});
+
+test("legacy link input still creates a proposed relationship", async () => {
+  const caseData = newCase("Legacy call");
+  caseData.entities = [
+    { id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" },
+    { id: "ent_2", type: "ip", value: "192.0.2.1", notes: "", added_by: "human", added_at: "2026-09-01T10:01:00.000Z" },
+  ];
+  const { registry, toolset } = harness(caseData);
+  await toolset.registerStaticTools();
+
+  const result = await registry.tools.get("link_entities").execute({ from_id: "ent_1", to_id: "ent_2", rationale: "DNS A record" });
+
+  assert.equal(result.link.status, "proposed");
+  assert.deepEqual(result.link.citations, []);
+});
+
+test("legacy evidence input remains valid", async () => {
+  const { registry, toolset } = harness();
+  await toolset.registerStaticTools();
+
+  const result = await registry.tools.get("attach_evidence").execute({ url: "https://example.com/source", quote: "Example quote" });
+
+  assert.equal(result.evidence.url, "https://example.com/source");
+  assert.equal(result.evidence.reading_id, null);
+  assert.equal(result.archived, false);
+});
+
+test("removing the final typed entity unregisters its pivot", async () => {
+  const { caseData, registry, toolset } = harness();
+  caseData.entities.push({ id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
+  await toolset.registerStaticTools();
+  await toolset.syncDynamicTools();
+  assert.equal(registry.has("pivot_domain"), true);
+
+  caseData.entities = [];
+  await toolset.syncDynamicTools();
+  assert.equal(registry.has("pivot_domain"), false);
+  assert.equal(registry.names().length, 10);
+});
