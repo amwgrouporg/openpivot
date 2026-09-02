@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenPivot</title>
+<meta name="description" content="An agent-driven investigation board over the open web's public record, exposed through WebMCP.">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">OpenPivot</div>
+  <input id="case-title" class="title" type="text" aria-label="Case title" placeholder="Case title">
+  <div class="spacer"></div>
+  <span id="mcp-status" class="pill">WebMCP: checking</span>
+  <button id="btn-export" class="btn">Export case</button>
+  <button id="btn-new" class="btn btn-quiet">New case</button>
+</header>
+<main class="layout">
+  <section class="graph-wrap">
+    <svg id="graph" role="img" aria-label="Entity graph"></svg>
+    <div class="legend" id="legend"></div>
+  </section>
+  <section class="panel">
+    <nav class="tabs" id="tabs">
+      <button data-tab="entities">Entities</button>
+      <button data-tab="links">Links</button>
+      <button data-tab="evidence">Evidence</button>
+      <button data-tab="readings">Readings</button>
+      <button data-tab="memo">Memo</button>
+      <button data-tab="log">Log</button>
+    </nav>
+    <div id="panel-body" class="panel-body"></div>
+  </section>
+</main>
+<footer class="foot" id="foot"></footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
