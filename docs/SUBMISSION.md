@@ -67,9 +67,10 @@ extraction. Case state lives in the browser; nothing is stored server-side.
      the proposed link appearing dashed on the graph. Human clicks Accept. Line goes solid.
 1:20 Agent proposes a second, weaker link (a urlscan page IP from an unrelated scan). Human
      reads the rationale, clicks Reject. Say why: the human owns the verdict.
-1:40 Agent: "Extract https://openpivot.edge-4q7m9x2k.workers.dev/demo/injected." Show the
-     reading land in the untrusted panel with the hidden "SYSTEM NOTICE TO AI AGENTS" text
-     visible. Agent attaches a quote as evidence with archive=true. Show the archived URL.
+1:40 Agent: "Add https://openpivot.edge-4q7m9x2k.workers.dev/demo/injected as a url and pivot
+     on it with archive." Show pivot_url appear, then the extract reading land in the untrusted
+     panel with the hidden "SYSTEM NOTICE TO AI AGENTS" text visible. Agent attaches a quote as
+     evidence. Show the archived URL on the evidence card.
 2:15 Agent writes its memo section. Human types two lines in the analyst section.
 2:35 Export. Open the markdown: entities, links with who asserted them, evidence with
      capture times, readings with source URLs, both memo sections, log.
