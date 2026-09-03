@@ -35,6 +35,22 @@ function legacyCase() {
   };
 }
 
+function pickGraphPreferences(ui) {
+  return {
+    graph_layout: ui.graph_layout,
+    graph_hops: ui.graph_hops,
+    graph_activity_window: ui.graph_activity_window,
+    graph_labels: ui.graph_labels,
+  };
+}
+
+function migratedPopulatedCase() {
+  const value = migrateCaseV1(legacyCase());
+  value.entities.push({ id: "ent_ip", type: "ip", value: "192.0.2.1", notes: "", added_by: "agent", added_at: "2026-09-01T10:02:00.000Z" });
+  value.ui.graph_positions = { ent_domain: { x: 120, y: 80 }, ent_ip: { x: 240, y: 160 } };
+  return value;
+}
+
 test("v1 migration copies records and initializes cockpit state", () => {
   const before = legacyCase();
   const migrated = migrateCaseV1(before);
@@ -47,6 +63,10 @@ test("v1 migration copies records and initializes cockpit state", () => {
     selected_entity_id: null,
     graph_positions: {},
     dismissed_candidates: [],
+    graph_layout: "force",
+    graph_hops: "all",
+    graph_activity_window: "all",
+    graph_labels: "auto",
   });
   assert.deepEqual(migrated.runs, []);
   assert.deepEqual(migrated.brief, { objective: "", scope: "", status: "active", updated_at: before.created_at });
@@ -96,6 +116,30 @@ test("repository migrates v1 once and retains the original backup", () => {
   assert.equal(loaded.version, 2);
   assert.ok(storage.values.has("openpivot.case.v1"));
   assert.equal(JSON.parse(storage.values.get("openpivot.case.v2")).version, 2);
+});
+
+test("graph preferences default and round trip", () => {
+  const repo = createLocalCaseRepository(memoryStorage());
+  const c = repo.create("Graph");
+  assert.deepEqual(pickGraphPreferences(c.ui), {
+    graph_layout: "force", graph_hops: "all", graph_activity_window: "all", graph_labels: "auto",
+  });
+  c.ui.graph_layout = "lanes";
+  c.ui.graph_hops = 2;
+  const imported = repo.importJson(repo.exportJson(c));
+  assert.equal(imported.ui.graph_layout, "lanes");
+  assert.equal(imported.ui.graph_hops, 2);
+});
+
+test("repair resets only invalid graph preferences", () => {
+  const c = migratedPopulatedCase();
+  c.ui.graph_layout = "three-dimensional";
+  c.ui.graph_hops = 2;
+  const loaded = createLocalCaseRepository(memoryStorage([["openpivot.case.v2", JSON.stringify(c)]])).load();
+  assert.equal(loaded.ui.graph_layout, "force");
+  assert.equal(loaded.ui.graph_hops, 2);
+  assert.equal(loaded.entities.length, c.entities.length);
+  assert.deepEqual(loaded.ui.graph_positions, c.ui.graph_positions);
 });
 
 test("migration returns the legacy case with a recovery notice when v2 persistence fails", () => {

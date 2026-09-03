@@ -6,6 +6,16 @@ const clone = (value) => (typeof structuredClone === "function"
   ? structuredClone(value)
   : JSON.parse(JSON.stringify(value)));
 
+function normalizeGraphPreferences(ui = {}) {
+  return {
+    ...ui,
+    graph_layout: ["force", "lanes", "radial"].includes(ui.graph_layout) ? ui.graph_layout : "force",
+    graph_hops: ["all", 1, 2].includes(ui.graph_hops) ? ui.graph_hops : "all",
+    graph_activity_window: ["all", "24h", "7d", "30d"].includes(ui.graph_activity_window) ? ui.graph_activity_window : "all",
+    graph_labels: ["auto", "all", "focus"].includes(ui.graph_labels) ? ui.graph_labels : "auto",
+  };
+}
+
 export function createEmptyCase(title = "Untitled case") {
   const createdAt = new Date().toISOString();
   return {
@@ -21,7 +31,7 @@ export function createEmptyCase(title = "Untitled case") {
     brief: { objective: "", scope: "", status: "active", updated_at: createdAt },
     memo: { human: "", gaps: "", methodology: "", agent: "", agent_updated_at: null },
     log: [],
-    ui: { selected_entity_id: null, graph_positions: {}, dismissed_candidates: [] },
+    ui: normalizeGraphPreferences({ selected_entity_id: null, graph_positions: {}, dismissed_candidates: [] }),
   };
 }
 
@@ -50,7 +60,7 @@ function assertNestedCase(value) {
     if (!isRecord(value.brief) || typeof value.brief.objective !== "string" || typeof value.brief.scope !== "string" || !["active", "on_hold", "closed"].includes(value.brief.status) || typeof value.brief.updated_at !== "string") fail("brief");
     if (typeof value.memo.gaps !== "string" || typeof value.memo.methodology !== "string") fail("findings");
     if (!Array.isArray(value.runs) || !value.runs.every((item) => isRecord(item) && typeof item.id === "string" && entityIds.has(item.entity_id) && actors.has(item.requested_by) && ["ok", "indeterminate"].includes(item.status) && Array.isArray(item.sensors) && item.sensors.every((sensor) => isRecord(sensor) && typeof sensor.name === "string" && ["queued", "running", "ok", "indeterminate"].includes(sensor.status)))) fail("runs");
-    if (!isRecord(value.ui) || !isRecord(value.ui.graph_positions) || !Object.values(value.ui.graph_positions).every((position) => isRecord(position) && Number.isFinite(position.x) && Number.isFinite(position.y)) || !Array.isArray(value.ui.dismissed_candidates) || !value.ui.dismissed_candidates.every((key) => typeof key === "string")) fail("ui state");
+    if (!isRecord(value.ui) || !isRecord(value.ui.graph_positions) || !Object.values(value.ui.graph_positions).every((position) => isRecord(position) && Number.isFinite(position.x) && Number.isFinite(position.y)) || !Array.isArray(value.ui.dismissed_candidates) || !value.ui.dismissed_candidates.every((key) => typeof key === "string") || !["force", "lanes", "radial"].includes(value.ui.graph_layout) || !["all", 1, 2].includes(value.ui.graph_hops) || !["all", "24h", "7d", "30d"].includes(value.ui.graph_activity_window) || !["auto", "all", "focus"].includes(value.ui.graph_labels)) fail("ui state");
   }
 }
 
@@ -79,7 +89,7 @@ export function migrateCaseV1(input) {
   migrated.links = migrated.links.map((link) => ({ ...link, relationship_type: link.relationship_type ?? "associated_with", citations: Array.isArray(link.citations) ? link.citations : [] }));
   migrated.evidence = migrated.evidence.map((evidence) => ({ ...evidence, relevance: evidence.relevance ?? "", reading_id: evidence.reading_id ?? null, archive_status: evidence.archived_url ? "confirmed" : "not_requested", archive_check_url: null }));
   migrated.runs = [];
-  migrated.ui = { selected_entity_id: null, graph_positions: {}, dismissed_candidates: [] };
+  migrated.ui = normalizeGraphPreferences({ selected_entity_id: null, graph_positions: {}, dismissed_candidates: [] });
   assertNestedCase(migrated);
   return migrated;
 }
@@ -96,6 +106,7 @@ function normalizeV2(input) {
   value.ui.selected_entity_id = value.ui.selected_entity_id ?? null;
   value.ui.graph_positions = isRecord(value.ui.graph_positions) ? value.ui.graph_positions : {};
   value.ui.dismissed_candidates = Array.isArray(value.ui.dismissed_candidates) ? value.ui.dismissed_candidates : [];
+  value.ui = normalizeGraphPreferences(value.ui);
   assertNestedCase(value);
   return value;
 }
@@ -130,6 +141,7 @@ function repairStoredV2(input) {
   value.ui.selected_entity_id = entityIds.has(value.ui.selected_entity_id) ? value.ui.selected_entity_id : null;
   value.ui.graph_positions = Object.fromEntries(Object.entries(isRecord(value.ui.graph_positions) ? value.ui.graph_positions : {}).filter(([id, position]) => entityIds.has(id) && isRecord(position) && Number.isFinite(position.x) && Number.isFinite(position.y)));
   value.ui.dismissed_candidates = (Array.isArray(value.ui.dismissed_candidates) ? value.ui.dismissed_candidates : []).filter((key) => typeof key === "string");
+  value.ui = normalizeGraphPreferences(value.ui);
   value.memo.agent_updated_at = typeof value.memo.agent_updated_at === "string" ? value.memo.agent_updated_at : null;
   return normalizeV2(value);
 }
