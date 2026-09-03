@@ -58,6 +58,22 @@ test("case activity is deterministic and marks contextual edges", () => {
   assert.equal(result.links.find((l) => l.id === "old-context").contextual, true);
 });
 
+test("recent eligible relationships keep endpoints active and update metadata", () => {
+  const c = fixtureCase();
+  c.entities = c.entities.map((entity) => ({ ...entity, added_at: "2026-08-01T10:00:00Z" }));
+  c.readings = [];
+  c.links = [{
+    id: "fresh-link", from: "a", to: "b", relationship_type: "resolves_to", status: "accepted",
+    at: "2026-09-03T11:30:00Z",
+  }];
+
+  const result = filterGraph(c, { activityWindow: "24h", now: "2026-09-03T12:00:00Z" });
+
+  assert.deepEqual(result.nodes.map((node) => node.id).sort(), ["a", "b"]);
+  assert.equal(result.nodes.find((node) => node.id === "a").metadata.lastCaseActivityAt, "2026-09-03T11:30:00Z");
+  assert.equal(result.nodes.find((node) => node.id === "b").metadata.lastCaseActivityAt, "2026-09-03T11:30:00Z");
+});
+
 test("parallel edge offsets are stable", () => {
   const links = [
     { id: "one", from: "a", to: "b", relationship_type: "resolves_to" },

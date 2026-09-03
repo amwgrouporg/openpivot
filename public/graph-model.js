@@ -25,12 +25,18 @@ function isInActivityWindow(timestamp, cutoff) {
   return Number.isFinite(value) && value >= cutoff;
 }
 
-function activeEntityIds(caseData, cutoff) {
+function activeEntityIds(caseData, links, cutoff) {
   const active = new Set();
   for (const entity of caseData.entities ?? []) if (isInActivityWindow(entity.added_at, cutoff)) active.add(entity.id);
   for (const reading of caseData.readings ?? []) if (isInActivityWindow(reading.fetched_at, cutoff)) active.add(reading.entity_id);
   for (const evidence of caseData.evidence ?? []) {
     if (isInActivityWindow(evidence.captured_at, cutoff)) for (const entityId of evidence.entity_ids ?? []) active.add(entityId);
+  }
+  for (const link of links ?? []) {
+    if (isInActivityWindow(link.at, cutoff) || isInActivityWindow(link.reviewed_at, cutoff)) {
+      active.add(link.from);
+      active.add(link.to);
+    }
   }
   return active;
 }
@@ -39,7 +45,7 @@ function activeLinkIds(links, cutoff) {
   return new Set(links.filter((link) => isInActivityWindow(link.at, cutoff) || isInActivityWindow(link.reviewed_at, cutoff)).map((link) => link.id));
 }
 
-export function nodeMetadata(caseData) {
+export function nodeMetadata(caseData, links = caseData.links) {
   const metadata = new Map((caseData.entities ?? []).map((entity) => [entity.id, {
     collectionStatus: "none",
     evidenceCount: 0,
@@ -62,10 +68,14 @@ export function nodeMetadata(caseData) {
       item.lastCaseActivityAt = laterTimestamp(item.lastCaseActivityAt, evidence.captured_at);
     }
   }
-  for (const link of caseData.links ?? []) {
+  for (const link of links ?? []) {
     for (const entityId of [link.from, link.to]) {
       const item = metadata.get(entityId);
-      if (item) item.relationshipCount += 1;
+      if (item) {
+        item.relationshipCount += 1;
+        item.lastCaseActivityAt = laterTimestamp(item.lastCaseActivityAt, link.at);
+        item.lastCaseActivityAt = laterTimestamp(item.lastCaseActivityAt, link.reviewed_at);
+      }
     }
   }
   return metadata;
@@ -175,13 +185,14 @@ export function filterGraph(caseData, filters = {}) {
   let nodes = (caseData.entities ?? []).filter((entity) => !allowedTypes || allowedTypes.has(entity.type));
   let nodeIds = new Set(nodes.map((node) => node.id));
   let links = (caseData.links ?? []).filter((link) => allowedStatuses.has(link.status) && nodeIds.has(link.from) && nodeIds.has(link.to));
+  const eligibleLinks = links;
 
   const windowMs = ACTIVITY_WINDOWS[filters.activityWindow];
   let activeLinks = new Set();
   if (windowMs) {
     const now = Date.parse(filters.now);
     const cutoff = now - windowMs;
-    const activeIds = activeEntityIds(caseData, cutoff);
+    const activeIds = activeEntityIds(caseData, eligibleLinks, cutoff);
     nodes = nodes.filter((node) => activeIds.has(node.id));
     nodeIds = new Set(nodes.map((node) => node.id));
     activeLinks = activeLinkIds(links, cutoff);
@@ -196,7 +207,7 @@ export function filterGraph(caseData, filters = {}) {
     links = links.filter((link) => nodeIds.has(link.from) && nodeIds.has(link.to));
   }
 
-  const metadata = nodeMetadata(caseData);
+  const metadata = nodeMetadata(caseData, eligibleLinks);
   const offsets = parallelEdgeOffsets(links);
   const density = {
     nodeCount: nodes.length,
