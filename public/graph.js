@@ -36,6 +36,28 @@ export function nodesForFit(nodes, selectedId = null) {
   return selectedId ? (nodes ?? []).filter((node) => node.id === selectedId) : [...(nodes ?? [])];
 }
 
+export function resetGraphLayoutNodes(nodes, links, { layout = "force", selectedId = null, width = 600, height = 400 } = {}) {
+  if (layout === "force") {
+    for (const node of nodes ?? []) {
+      node.fx = null;
+      node.fy = null;
+      delete node.x;
+      delete node.y;
+    }
+    return nodes;
+  }
+  const targets = layoutTargets(nodes, links, { layout, selectedId, width, height });
+  for (const node of nodes ?? []) {
+    const target = targets.get(node.id);
+    if (!target) continue;
+    node.x = target.x;
+    node.y = target.y;
+    node.fx = target.x;
+    node.fy = target.y;
+  }
+  return nodes;
+}
+
 export function createGraph(svgEl, options = {}) {
   const onSelectEntity = options.onSelectEntity ?? options.onSelect ?? (() => {});
   const onSelectLink = options.onSelectLink ?? (() => {});
@@ -59,6 +81,10 @@ export function createGraph(svgEl, options = {}) {
   let nodesRef = [];
   let allNodesRef = null;
   let labelIdsRef = new Set();
+  let activeLayout = "force";
+  let activeLayoutLinks = [];
+  let activeLayoutSelectedId = null;
+  let paintNodes = () => {};
   let positionTimer = null;
   const positions = new Map();
   const simulation = d3.forceSimulation()
@@ -93,7 +119,8 @@ export function createGraph(svgEl, options = {}) {
       return next;
     });
     const layout = filters.layout ?? filters.graph_layout ?? "force";
-    const targets = layoutTargets(nodes, model.links, { layout, selectedId: filters.selectedId ?? selectedEntityId, width, height });
+    const layoutSelectedId = filters.selectedId ?? selectedEntityId;
+    const targets = layoutTargets(nodes, model.links, { layout, selectedId: layoutSelectedId, width, height });
     for (const node of nodes) {
       const target = targets.get(node.id);
       if (layout === "force") {
@@ -106,6 +133,9 @@ export function createGraph(svgEl, options = {}) {
         node.fy = target.y;
       }
     }
+    activeLayout = layout;
+    activeLayoutLinks = model.links;
+    activeLayoutSelectedId = layoutSelectedId;
     nodesRef = nodes;
     const links = model.links.map((link) => ({ ...link, source: link.from, target: link.to }));
 
@@ -149,6 +179,7 @@ export function createGraph(svgEl, options = {}) {
       allLinks.attr("x1", (item) => item.source.x).attr("y1", (item) => item.source.y).attr("x2", (item) => item.target.x).attr("y2", (item) => item.target.y);
       allNodes.attr("transform", (item) => `translate(${item.x},${item.y})`);
     };
+    paintNodes = paint;
     simulation.nodes(nodes).on("tick", paint);
     simulation.force("link").links(links);
     if (layout !== "force") {
@@ -182,14 +213,13 @@ export function createGraph(svgEl, options = {}) {
 
   function resetLayout() {
     positions.clear();
-    for (const node of nodesRef) { node.fx = null; node.fy = null; delete node.x; delete node.y; }
+    resetGraphLayoutNodes(nodesRef, activeLayoutLinks, { layout: activeLayout, selectedId: activeLayoutSelectedId, width, height });
     onPositionsChange({}, { replace: true });
-    if (reducedMotion) {
-      settleImmediately(simulation, () => {
-        linkLayer.selectAll("line.graph-link").attr("x1", (item) => item.source.x).attr("y1", (item) => item.source.y).attr("x2", (item) => item.target.x).attr("y2", (item) => item.target.y);
-        nodeLayer.selectAll("g.graph-node").attr("transform", (item) => `translate(${item.x},${item.y})`);
-      });
-    } else simulation.alpha(1).restart();
+    if (activeLayout !== "force") {
+      simulation.stop();
+      paintNodes();
+    } else if (reducedMotion) settleImmediately(simulation, paintNodes);
+    else simulation.alpha(1).restart();
   }
 
   function selectEntity(id) {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createGraph, graphLabelIds, graphListModel, mergeGraphPositions, nodesForFit, settleImmediately } from "../public/graph.js";
+import { createGraph, graphLabelIds, graphListModel, mergeGraphPositions, nodesForFit, resetGraphLayoutNodes, settleImmediately } from "../public/graph.js";
 import { newCase } from "../public/store.js";
 
 function graphCase() {
@@ -90,4 +90,26 @@ test("selection-aware fit excludes unrelated graph nodes", () => {
 
   assert.deepEqual(nodesForFit(nodes, "ent_2"), [{ id: "ent_2", x: 220, y: 220 }]);
   assert.equal(typeof createGraph(null).fitSelection, "function");
+});
+
+test("reset reapplies active lanes and radial layout targets", () => {
+  const laneNodes = [
+    { id: "domain", type: "domain", x: 4, y: 4, fx: 4, fy: 4 },
+    { id: "ip", type: "ip", x: 5, y: 5, fx: 5, fy: 5 },
+  ];
+  resetGraphLayoutNodes(laneNodes, [], { layout: "lanes", width: 700, height: 400 });
+  assert.deepEqual(laneNodes.map(({ id, x, y, fx, fy }) => ({ id, x, y, fx, fy })), [
+    { id: "domain", x: 100, y: 200, fx: 100, fy: 200 },
+    { id: "ip", x: 300, y: 200, fx: 300, fy: 200 },
+  ]);
+
+  const radialNodes = [
+    { id: "a", type: "domain", x: 0, y: 0, fx: 0, fy: 0 },
+    { id: "b", type: "ip", x: 0, y: 0, fx: 0, fy: 0 },
+  ];
+  resetGraphLayoutNodes(radialNodes, [{ from: "a", to: "b" }], { layout: "radial", selectedId: "a", width: 400, height: 400 });
+  assert.deepEqual(radialNodes.map(({ id, x, y, fx, fy }) => ({ id, x, y, fx, fy })), [
+    { id: "a", x: 200, y: 200, fx: 200, fy: 200 },
+    { id: "b", x: 290, y: 200, fx: 290, fy: 200 },
+  ]);
 });
