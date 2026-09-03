@@ -17,6 +17,30 @@ The 250-entity / 500-relationship pure graph model completed in **21.768621 ms**
 100 ms budget. The measurement uses the same synthetic case and filter options as
 `tests/graph-performance.test.js`; the enclosing test took 23.380281 ms in the final full-suite run.
 
+### Complete browser graph performance
+
+Environment: Codex in-app browser, Chromium-based engine, 1280 × 720 viewport. The supported Browser
+API does not expose the exact Chromium user-agent/version. A generated, repository-valid 149 KB case
+with 250 entities and 500 accepted/proposed relationships was imported through the visible
+**Findings → Import case JSON** file chooser, exercising the application's normal repository validation,
+persistence, transient-state reset, and render path.
+
+After reloading the imported case, QA activated Case overview and then Entities. Temporary in-page
+instrumentation measured from the start of the Entities navigation handler through synchronous
+`render()`, `createGraph()`, `graph.update()`, SVG record creation, and pointer/keyboard handler binding.
+The serialized result was:
+
+```text
+openpivot: entities interaction ready {"elapsed_ms":184.60000002384186,"nodes":250,"edges":500}
+```
+
+The complete graph therefore became interactive in **184.60000002384186 ms**, below the 500 ms browser
+budget, with exactly 250 `g.graph-node` and 500 `g.graph-edge` records already bound. Pressing Enter on
+the first graph node opened its visible entity workbench. An external Browser-client activation/poll
+clock measured 704 ms because it also includes automation RPC and polling latency; it is recorded as a
+conservative end-to-end harness observation, not the application render budget. The temporary
+instrumentation was removed after capture; no performance-only code remains.
+
 Coverage added for:
 
 - v1-to-v2 migration and retained v1 backup;
@@ -118,7 +142,7 @@ archive sensor regression verifies the 18-second application budget and submitte
 | Reload | Entity lanes and the selected domain survived reload. A dragged domain moved from `(233.022, 267.485)` to `(329.972, 223.854)` and reloaded at `(295.696, 240.871)` before force settling |
 | Keyboard and focus | Six graph nodes and six in-case edges exposed `role=button` / `tabindex=0`; Enter selected the exact reverse edge. Workbench close returned focus to its entity row, entity selection focused the workbench heading, filters restored their controls, and relationship verdicts focused the reviewed card |
 | Semantic alternative | The active graph exposed 12 alternative buttons (6 nodes + 6 in-case edges); a traced path added “included in traced path” to its 3 node and 2 relationship alternatives |
-| Reduced motion | The stylesheet contains one `prefers-reduced-motion: reduce` branch that removes transitions and animation duration; three automated graph tests cover synchronous settle, drag repaint/publish, and radial fixed-center behavior. The selected in-app browser reported the normal-motion OS preference and does not expose preference emulation |
+| Reduced motion | Live emulation remains platform-blocked. The Codex in-app browser exposes no media emulation; connected Google Chrome 152.0.7977.65 exposes viewport only through the supported Browser API, and browser security policy blocked Chrome-internal emulation with an explicit no-workaround directive. No alternate CDP or settings mutation was attempted. Existing evidence remains one `prefers-reduced-motion: reduce` CSS branch plus three passing integration-helper tests for synchronous settle, drag repaint/publish, and radial fixed-center behavior |
 | Console | Final browser log query returned 0 warnings and 0 errors |
 
 Accessibility inspection found no duplicate ids. The browser accessibility tree named navigation,
