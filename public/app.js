@@ -12,7 +12,7 @@ import { escapeHtml, icon } from "./ui/components.js";
 import { renderShell } from "./ui/shell.js";
 import { renderOverview } from "./ui/overview.js";
 import { renderEntities } from "./ui/entities.js";
-import { captureFormState, createCaseActions, leadTriageFocusSelector, parseCandidate, resetTransientUi, restoreFormState } from "./ui/events.js";
+import { captureFormState, commandKeyAction, createCaseActions, leadTriageFocusSelector, parseCandidate, resetTransientUi, restoreFormState } from "./ui/events.js";
 import { relationshipFocusFilter, renderRelationships } from "./ui/relationships.js";
 import { renderEvidence } from "./ui/evidence.js";
 import { renderReport } from "./ui/report.js";
@@ -49,6 +49,8 @@ const ui = {
   skipFormRestore: false,
   selectedLeadKeys: new Set(),
   searchQuery: "",
+  searchOpen: false,
+  searchReturnFocus: null,
 };
 
 function hydrateCandidates() {
@@ -236,6 +238,7 @@ function render(referenceNow = new Date().toISOString()) {
     workbenchHtml: ui.activityOpen ? activityWorkbench() : content.workbenchHtml,
     noticeHtml,
     searchQuery: ui.searchQuery,
+    searchOpen: ui.searchOpen,
     searchResultsHtml: renderSearchResults(ui.searchQuery, searchResults),
   });
   app.querySelector("[data-modal-host]").innerHTML = modalHtml();
@@ -292,11 +295,24 @@ function restoreReturnFocus() {
 
 function focusSelector(selector) {
   requestAnimationFrame(() => {
-    const target = app.querySelector(selector);
+    const targets = [...app.querySelectorAll(selector)];
+    const target = targets.find((candidate) => candidate.getClientRects().length && !candidate.disabled) ?? targets[0];
     if (!target) return;
     if (!target.matches("button, input, select, textarea, a[href], [tabindex]")) target.setAttribute("tabindex", "-1");
     target.focus();
   });
+}
+
+function focusReturnSelector(element) {
+  if (!element || element === document.body) return ".main-surface h1";
+  if (element.id) return `#${CSS.escape(element.id)}`;
+  for (const name of ["action", "viewAction", "graphAction", "control"]) {
+    const value = element.dataset?.[name];
+    if (!value) continue;
+    const attribute = name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+    return `[data-${attribute}="${CSS.escape(value)}"]`;
+  }
+  return ".main-surface h1";
 }
 
 function download(text, type, filename) {
@@ -418,6 +434,7 @@ app.addEventListener("change", (event) => {
 app.addEventListener("input", (event) => {
   if (event.target.id === "case-search") {
     ui.searchQuery = event.target.value;
+    ui.searchOpen = true;
     render();
     focusSelector("#case-search");
     return;
@@ -436,19 +453,11 @@ app.addEventListener("focusout", (event) => {
   repository.save(caseData);
 });
 
-app.addEventListener("keydown", (event) => {
+document.addEventListener("keydown", (event) => {
   const modal = event.target.closest?.("[role='dialog']");
   if (event.target.id === "case-search" && event.key === "ArrowDown") {
     const first = app.querySelector(".case-search-results [role='option']");
     if (first) { event.preventDefault(); first.focus(); }
-    return;
-  }
-  if (event.key === "Escape" && ui.searchQuery && !ui.modal) {
-    event.preventDefault();
-    ui.searchQuery = "";
-    ui.skipFormRestore = true;
-    render();
-    focusSelector("#case-search");
     return;
   }
   if (event.key === "Escape" && ui.modal) {
@@ -456,6 +465,28 @@ app.addEventListener("keydown", (event) => {
     ui.modal = null;
     render();
     restoreReturnFocus();
+    return;
+  }
+  const commandAction = commandKeyAction(event, { searchOpen: ui.searchOpen || Boolean(ui.searchQuery), modalOpen: Boolean(ui.modal) });
+  if (commandAction === "open-search") {
+    event.preventDefault();
+    ui.searchOpen = true;
+    ui.searchReturnFocus = focusReturnSelector(document.activeElement);
+    const search = app.querySelector("#case-search");
+    search?.closest(".case-search")?.classList.add("is-command-open");
+    search?.focus();
+    search?.select();
+    return;
+  }
+  if (commandAction === "close-search") {
+    event.preventDefault();
+    const returnSelector = ui.searchReturnFocus;
+    ui.searchQuery = "";
+    ui.searchOpen = false;
+    ui.searchReturnFocus = null;
+    ui.skipFormRestore = true;
+    render();
+    focusSelector(returnSelector || "#case-search");
     return;
   }
   if (event.key !== "Tab" || !modal) return;
@@ -599,6 +630,8 @@ app.addEventListener("click", async (event) => {
     if (action === "evidence-from-reading") { ui.evidenceDraft = evidenceDraftFromReading(caseData, id); ui.view = "evidence"; render(); focusSelector("#evidence-url"); }
     if (action === "search-result") {
       ui.searchQuery = "";
+      ui.searchOpen = false;
+      ui.searchReturnFocus = null;
       ui.skipFormRestore = true;
       ui.view = element.dataset.view;
       if (element.dataset.entityId) { ui.selected = element.dataset.entityId; caseData.ui.selected_entity_id = ui.selected; repository.save(caseData); }

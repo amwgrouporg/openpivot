@@ -1,5 +1,12 @@
 import { addEntity, addEvidence, addLink, dismissCandidate, findEntity, removeEntity, restoreCandidate, restoreRemoval, setFindingsField, setLinkStatus, setMemo, updateCaseBrief, updateEntityNotes } from "../store.js";
 
+export function commandKeyAction(event, state = {}) {
+  if (state.modalOpen) return null;
+  if (String(event?.key ?? "").toLowerCase() === "k" && (event?.metaKey || event?.ctrlKey)) return "open-search";
+  if (event?.key === "Escape" && state.searchOpen) return "close-search";
+  return null;
+}
+
 export function createCaseActions({ getCase, persist, setUi, runEntityPivot }) {
   let removalSnapshot = null;
   const save = ({ preserveUndo = false } = {}) => {
@@ -173,6 +180,8 @@ export function resetTransientUi(ui) {
   ui.path = null;
   ui.skipFormRestore = true;
   if ("searchQuery" in ui) ui.searchQuery = "";
+  if ("searchOpen" in ui) ui.searchOpen = false;
+  if ("searchReturnFocus" in ui) ui.searchReturnFocus = null;
   if (ui.selectedLeadKeys?.clear) ui.selectedLeadKeys.clear();
   return ui;
 }

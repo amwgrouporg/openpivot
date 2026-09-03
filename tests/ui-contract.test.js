@@ -4,7 +4,7 @@ import { actorBadge, entityGlyph, safeLink, statusBadge, typeBadge } from "../pu
 import { renderShell } from "../public/ui/shell.js";
 import { renderOverview } from "../public/ui/overview.js";
 import { renderEntities } from "../public/ui/entities.js";
-import { captureFormState, createCaseActions, leadTriageFocusSelector, resetTransientUi, restoreFormState } from "../public/ui/events.js";
+import { captureFormState, commandKeyAction, createCaseActions, leadTriageFocusSelector, resetTransientUi, restoreFormState } from "../public/ui/events.js";
 import { relationshipFocusFilter, renderRelationships } from "../public/ui/relationships.js";
 import { renderEvidence } from "../public/ui/evidence.js";
 import { renderReport } from "../public/ui/report.js";
@@ -74,6 +74,28 @@ test("shell contains dedicated modal and toast hosts outside main content", () =
   assert.match(html, /Collection tools unavailable/);
 });
 
+test("command key opens search and Escape closes it", () => {
+  assert.equal(commandKeyAction({ key: "k", metaKey: true }, { searchOpen: false }), "open-search");
+  assert.equal(commandKeyAction({ key: "k", ctrlKey: true }, { searchOpen: false }), "open-search");
+  assert.equal(commandKeyAction({ key: "Escape" }, { searchOpen: true }), "close-search");
+  assert.equal(commandKeyAction({ key: "k", metaKey: true }, { searchOpen: false, modalOpen: true }), null);
+});
+
+test("shell exposes local-search shortcut and visual-system hooks", () => {
+  const html = renderShell({
+    caseData: { title: "Case", entities: [], links: [], evidence: [], readings: [], log: [] },
+    activeView: "overview",
+    counts: {},
+    webmcpState: { available: true, toolNames: [] },
+    contentHtml: '<section class="view-enter">Case overview</section>',
+  });
+
+  assert.match(html, /Search this case/);
+  assert.match(html, /⌘K|Ctrl K/);
+  assert.match(html, /app-depth-field[^>]*aria-hidden="true"/);
+  assert.match(html, /workspace-frame/);
+});
+
 test("overview makes human decisions more prominent than completed activity", () => {
   const caseData = newCase("Queue");
   caseData.entities.push({ id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
@@ -114,7 +136,7 @@ test("graph controls expose every analyst mode", () => {
   const withoutSelection = renderGraphControls({ preferences: {}, selectedId: null, pathMode: false, path: null, density: { message: "" } });
   assert.match(withoutSelection, /data-value="radial"[^>]*disabled/);
   assert.match(withoutSelection, /data-graph-action="fit-selection"[^>]*disabled/);
-  assert.equal(renderPathBreadcrumb(null, null), '<p class="graph-path-empty">No path is present in the current graph filters.</p>');
+  assert.equal(renderPathBreadcrumb(null, null), '<p class="graph-path-empty" role="status">No path is present in the current graph filters.</p>');
 });
 
 test("path breadcrumb names entities and relationship types", () => {
@@ -322,7 +344,33 @@ test("primary cyber investigation views avoid unsupported verification claims", 
     renderEvidence({ caseData }),
     renderReport({ caseData }),
   ].join(" ");
-  assert.doesNotMatch(rendered, /\bverified\b|\btrusted\b|\bproven\b/i);
+  assert.doesNotMatch(rendered, /\b(?:verified|trusted|proven|confidence|attributed)\b|confirmed relationship/i);
+});
+
+test("primary renderers expose view entrance and investigation surface hooks", () => {
+  const caseData = newCase("Visual system");
+  caseData.entities.push({ id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
+  const rendered = [
+    renderOverview({ caseData, queue: [], webmcpState: { available: true, toolNames: [] } }),
+    renderEntities({ caseData, selected: caseData.entities[0], candidates: [], activeRun: null }).contentHtml,
+    renderRelationships({ caseData }),
+    renderEvidence({ caseData }),
+    renderReport({ caseData }),
+  ];
+
+  for (const html of rendered) assert.match(html, /class="[^"]*view-enter/);
+  assert.match(rendered[0], /metric-surface/);
+  assert.match(rendered[1], /entity-surface/);
+  assert.match(rendered[2], /relationship-surface/);
+  assert.match(rendered[3], /evidence-surface/);
+  assert.match(rendered[4], /findings-surface/);
+  assert.match(rendered[4], /source-surface/);
+});
+
+test("graph disclosure and path updates preserve accessible semantics", () => {
+  const controls = renderGraphControls({ preferences: {}, selectedId: null, pathMode: true, pathStartId: "ent_1", path: null, density: { message: "" } });
+  assert.match(controls, /<details[^>]*class="graph-legend"/);
+  assert.match(controls, /graph-path-(?:instructions|empty)[^>]*(?:aria-live="polite"|role="status")/);
 });
 
 test("case actions attach evidence and save only the analyst memo", () => {

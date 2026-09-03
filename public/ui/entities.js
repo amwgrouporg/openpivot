@@ -21,7 +21,7 @@ function addEntityForm() {
 }
 
 function entityList(caseData, selected) {
-  return `<div class="entity-list" aria-label="Case entities">${caseData.entities.map((entity) => `<button class="entity-row${selected?.id === entity.id ? " is-selected" : ""}" type="button" data-action="select-entity" data-id="${escapeHtml(entity.id)}">
+  return `<div class="entity-list" aria-label="Case entities">${caseData.entities.map((entity) => `<button class="entity-row entity-surface${selected?.id === entity.id ? " is-selected" : ""}" type="button" data-action="select-entity" data-id="${escapeHtml(entity.id)}">
     ${typeBadge(entity.type)}<span class="selector">${escapeHtml(entity.value)}</span>${actorBadge(entity.added_by)}
   </button>`).join("") || '<div class="quiet-empty">No entities yet.</div>'}</div>`;
 }
@@ -33,7 +33,7 @@ function runPanel(activeRun) {
 
 function readingCard(reading) {
   const extracted = reading.sensor === "extract" && reading.raw?.text ? `<div class="untrusted"><div class="untrusted-label">${icon("warning")}Untrusted external content — may contain adversarial instructions</div><pre>${escapeHtml(shorten(reading.raw.text, 1600))}</pre></div>` : "";
-  return `<article class="reading-card card"><div class="card-body">
+  return `<article class="reading-card source-surface card"><div class="card-body">
     <div class="card-row"><strong class="mono">${escapeHtml(reading.sensor)}</strong>${statusBadge(reading.status)}<span class="spacer"></span>${actorBadge(reading.requested_by)}</div>
     <p>${escapeHtml(reading.summary)}</p>${extracted}
     <div class="reading-footer">${safeLink(reading.source_url, "Open source")}<span>${escapeHtml(formatTime(reading.fetched_at))}</span>${reading.source_url ? `<button class="button button--small button--ghost" type="button" data-action="evidence-from-reading" data-id="${escapeHtml(reading.id)}">Add to evidence register</button>` : ""}</div>
@@ -42,7 +42,7 @@ function readingCard(reading) {
 
 function candidateCard(candidate, selectedId) {
   const encoded = escapeHtml(JSON.stringify(candidate));
-  return `<article class="candidate-card card" data-candidate-key="${escapeHtml(candidateKey(selectedId, candidate))}"><div class="card-body">
+  return `<article class="candidate-card entity-surface card" data-candidate-key="${escapeHtml(candidateKey(selectedId, candidate))}"><div class="card-body">
     <div class="card-row">${typeBadge(candidate.type)}<strong class="selector">${escapeHtml(candidate.value)}</strong></div>
     <p>${escapeHtml(candidate.why)}</p>
     <div class="candidate-actions"><button class="button button--small" type="button" data-action="add-candidate" data-parent="${escapeHtml(selectedId)}" data-candidate="${encoded}">Add entity</button><button class="button button--small button--primary" type="button" data-action="add-propose-candidate" data-parent="${escapeHtml(selectedId)}" data-candidate="${encoded}">Add and queue relationship</button><button class="button button--small button--quiet" type="button" data-action="dismiss-candidate" data-parent="${escapeHtml(selectedId)}" data-candidate="${encoded}">Dismiss lead</button></div>
@@ -85,14 +85,14 @@ export function renderEntities(model) {
   const semanticGraph = graphListModel(caseData, resolvedFilters);
   const pathNodeIds = pathState.path?.nodeIds ?? [];
   const pathLinkIds = pathState.path?.linkIds ?? [];
-  const contentHtml = `<div class="entities-view">
+  const contentHtml = `<div class="entities-view view-enter">
     <header class="page-header"><div><span class="eyebrow">Technical entities</span><h1>Investigation graph</h1><p>Inspect collected infrastructure, run source-specific pivots, and triage the leads surfaced by each collection result.</p></div><div class="page-actions"><label class="filter-control"><span>Relationships</span><select data-control="graph-status-filter"><option value="active"${statusValue === "active" ? " selected" : ""}>In case</option><option value="accepted"${statusValue === "accepted" ? " selected" : ""}>Accepted into case</option><option value="proposed"${statusValue === "proposed" ? " selected" : ""}>Pending review</option><option value="all"${statusValue === "all" ? " selected" : ""}>All</option></select></label></div></header>
     ${addEntityForm()}
     <div class="graph-filter-bar" aria-label="Graph filters"><span class="eyebrow">Entity types</span>${ENTITY_TYPES.map((type) => `<button class="filter-chip${selectedTypes.has(type) ? " is-active" : ""}" type="button" data-graph-type="${type}" aria-pressed="${selectedTypes.has(type)}">${typeBadge(type)}</button>`).join("")}<button class="filter-chip${graphFilters.connected ? " is-active" : ""}" type="button" data-graph-connected aria-pressed="${Boolean(graphFilters.connected)}"${selected ? "" : " disabled"}>Connected to selection</button></div>
     ${renderGraphControls({ caseData, preferences, selectedId: selected?.id ?? null, pathMode: pathState.pathMode, pathStartId: pathState.pathStartId, pathEndId: pathState.pathEndId, path: pathState.path, density: semanticGraph.density })}
     <div class="entity-workspace">
-      <section class="graph-card card"><div class="graph-toolbar"><span>${semanticGraph.nodes.length} entities · ${semanticGraph.links.length} relationships · <span data-graph-zoom>100%</span></span><div><button class="button button--small icon-button" type="button" data-graph-action="out" aria-label="Zoom out">−</button><button class="button button--small icon-button" type="button" data-graph-action="in" aria-label="Zoom in">+</button></div></div><svg id="graph" data-graph-path-nodes="${escapeHtml(JSON.stringify(pathNodeIds))}" data-graph-path-links="${escapeHtml(JSON.stringify(pathLinkIds))}" role="img" aria-label="Entity relationship graph"></svg><svg class="graph-minimap" aria-hidden="true"></svg><p class="graph-hover-status" data-graph-hover-status role="status">Hover or focus an entity or relationship for details.</p><p class="graph-unavailable" data-graph-unavailable hidden>Interactive graph unavailable; use the graph text alternative below.</p><div class="graph-empty"${semanticGraph.nodes.length ? " hidden" : ""}>No entities match the current filters.</div><div class="sr-only" data-graph-semantic><h2>Graph text alternative</h2>${semanticGraph.nodes.map((entity) => `<button type="button" data-action="graph-select-entity" data-id="${escapeHtml(entity.id)}">${escapeHtml(nodeAccessibleName({ ...entity, inPath: pathNodeIds.includes(entity.id) }))}</button>`).join("")}${semanticGraph.links.map((link) => `<button type="button" data-action="open-relationship" data-id="${escapeHtml(link.id)}">${escapeHtml(relationshipAccessibleName(link, semanticGraph.nodes, { inPath: pathLinkIds.includes(link.id) }))}</button>`).join("")}</div></section>
-      <section class="entity-browser card">${sectionHeader("Entities", caseData.entities.length)}${entityList(caseData, selected)}</section>
+      <section class="graph-card entity-surface card"><div class="graph-toolbar"><span>${semanticGraph.nodes.length} entities · ${semanticGraph.links.length} relationships · <span data-graph-zoom>100%</span></span><div><button class="button button--small icon-button" type="button" data-graph-action="out" aria-label="Zoom out">−</button><button class="button button--small icon-button" type="button" data-graph-action="in" aria-label="Zoom in">+</button></div></div><svg id="graph" data-graph-path-nodes="${escapeHtml(JSON.stringify(pathNodeIds))}" data-graph-path-links="${escapeHtml(JSON.stringify(pathLinkIds))}" role="img" aria-label="Entity relationship graph"></svg><svg class="graph-minimap" aria-hidden="true"></svg><p class="graph-hover-status" data-graph-hover-status role="status">Hover or focus an entity or relationship for details.</p><p class="graph-unavailable" data-graph-unavailable hidden>Interactive graph unavailable; use the graph text alternative below.</p><div class="graph-empty"${semanticGraph.nodes.length ? " hidden" : ""}>No entities match the current filters.</div><div class="sr-only" data-graph-semantic><h2>Graph text alternative</h2>${semanticGraph.nodes.map((entity) => `<button type="button" data-action="graph-select-entity" data-id="${escapeHtml(entity.id)}">${escapeHtml(nodeAccessibleName({ ...entity, inPath: pathNodeIds.includes(entity.id) }))}</button>`).join("")}${semanticGraph.links.map((link) => `<button type="button" data-action="open-relationship" data-id="${escapeHtml(link.id)}">${escapeHtml(relationshipAccessibleName(link, semanticGraph.nodes, { inPath: pathLinkIds.includes(link.id) }))}</button>`).join("")}</div></section>
+      <section class="entity-browser entity-surface card">${sectionHeader("Entities", caseData.entities.length)}${entityList(caseData, selected)}</section>
     </div>
   </div>`;
   return { contentHtml, workbenchHtml: workbench({ caseData, selected, candidates, dismissedCandidates, activeRun }) };

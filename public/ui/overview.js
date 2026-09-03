@@ -19,7 +19,7 @@ function caseBriefForm(caseData, compact = false) {
 function queueCard(item) {
   if (item.kind === "relationship") {
     const record = item.record;
-    return `<article class="queue-card queue-card--decision card" data-open-relationship="${escapeHtml(item.id)}">
+    return `<article class="queue-card queue-surface queue-card--decision card" data-open-relationship="${escapeHtml(item.id)}">
       <div class="queue-accent"></div><div class="card-body">
         <div class="card-row"><span class="queue-kicker">Relationship pending review</span>${statusBadge("proposed")}</div>
         <div class="relationship-route"><span class="selector">${escapeHtml(record.from?.value)}</span>${icon("arrow")}<span class="selector">${escapeHtml(record.to?.value)}</span></div>
@@ -29,7 +29,7 @@ function queueCard(item) {
   }
   if (item.kind === "reading") {
     const record = item.record;
-    return `<article class="queue-card card"><div class="card-body">
+    return `<article class="queue-card queue-surface card"><div class="card-body">
       <div class="card-row"><span class="queue-kicker">Collection requires follow-up</span>${statusBadge(record.status)}</div>
       <strong class="selector">${escapeHtml(record.sensor)}</strong><p>${escapeHtml(record.summary)}</p>
       <button class="button button--small button--ghost" type="button" data-action="select-entity" data-id="${escapeHtml(record.entity_id)}">Inspect collection result</button>
@@ -37,13 +37,13 @@ function queueCard(item) {
   }
   if (item.kind === "candidate") {
     const record = item.record;
-    return `<article class="queue-card card"><div class="card-body">
+    return `<article class="queue-card queue-surface card"><div class="card-body">
       <div class="card-row"><span class="queue-kicker">Untriaged investigative lead</span>${typeBadge(record.type)}</div>
       <strong class="selector">${escapeHtml(record.value)}</strong><p>${escapeHtml(record.why)}</p>
       <button class="button button--small button--ghost" type="button" data-action="select-entity" data-id="${escapeHtml(item.entity_id)}">Triage lead</button>
     </div></article>`;
   }
-  return `<article class="queue-card card"><div class="card-body">
+  return `<article class="queue-card queue-surface card"><div class="card-body">
     <div class="card-row"><span class="queue-kicker">Collection completed</span>${statusBadge(item.record.status)}</div>
     <p>Completed ${escapeHtml(formatTime(item.record.completed_at))}</p>
     <button class="button button--small button--ghost" type="button" data-action="select-entity" data-id="${escapeHtml(item.entity_id)}">Open entity</button>
@@ -58,7 +58,7 @@ function leadGroupsView(groups, selectedKeys) {
 export function renderOverview({ caseData, queue, webmcpState, leadGroups = [], selectedLeadKeys = new Set() }) {
   const toolCount = webmcpState?.toolNames?.length ?? 0;
   if (!caseData.entities.length) {
-    return `<section class="empty-state">
+    return `<section class="empty-state empty-surface view-enter">
       <div class="empty-symbol">${icon("entities")}</div>
       <span class="eyebrow">New cyber investigation</span>
       <h1>Start with one selector</h1>
@@ -76,19 +76,19 @@ export function renderOverview({ caseData, queue, webmcpState, leadGroups = [], 
     run: queue.filter((item) => item.kind === "run"),
   };
   const decisions = groups.relationship.length + groups.reading.length + groups.candidate.length;
-  return `<div class="overview-view">
+  return `<div class="overview-view view-enter">
     <header class="page-header"><div><span class="eyebrow">Case status</span><h1>${decisions ? "Review priorities" : "No outstanding review items"}</h1><p>${decisions ? `${groups.relationship.length} relationships pending review · ${groups.reading.length} inconclusive collection results · ${groups.candidate.length} untriaged leads` : "No relationships, collection results, or investigative leads currently require analyst action."}</p></div><div class="page-actions"><button class="button button--primary" type="button" data-view-action="entities">${icon("plus")}Add entity</button></div></header>
     ${caseBriefForm(caseData)}
     <section class="metrics-grid" aria-label="Case summary">
-      <div class="metric card"><span>Entities</span><strong>${caseData.entities.length}</strong><small>${caseData.entities.filter((item) => item.added_by === "agent").length} agent-added</small></div>
-      <div class="metric card"><span>Review priorities</span><strong class="${decisions ? "attention-text" : ""}">${decisions}</strong><small>${groups.relationship.length} relationships · ${groups.reading.length} inconclusive</small></div>
-      <div class="metric card"><span>Evidence register</span><strong>${caseData.evidence.length}</strong><small>${caseData.readings.length} collection results</small></div>
-      <div class="metric card"><span>Collection tools</span><strong>${toolCount}</strong><small>${webmcpState?.available ? "Available to the agent" : "Not available"}</small></div>
+      <div class="metric metric-surface card"><span>Entities</span><strong>${caseData.entities.length}</strong><small>${caseData.entities.filter((item) => item.added_by === "agent").length} agent-added</small></div>
+      <div class="metric metric-surface card"><span>Review priorities</span><strong class="${decisions ? "attention-text" : ""}">${decisions}</strong><small>${groups.relationship.length} relationships · ${groups.reading.length} inconclusive</small></div>
+      <div class="metric metric-surface card"><span>Evidence register</span><strong>${caseData.evidence.length}</strong><small>${caseData.readings.length} collection results</small></div>
+      <div class="metric metric-surface card"><span>Collection tools</span><strong>${toolCount}</strong><small>${webmcpState?.available ? "Available to the agent" : "Not available"}</small></div>
     </section>
     ${groups.relationship.length ? `<section class="queue-section">${sectionHeader("Relationships pending review", groups.relationship.length)}<div class="queue-grid">${groups.relationship.map(queueCard).join("")}</div></section>` : ""}
     ${groups.reading.length ? `<section class="queue-section">${sectionHeader("Collection inconclusive", groups.reading.length)}<div class="queue-grid">${groups.reading.map(queueCard).join("")}</div></section>` : ""}
     ${groups.candidate.length ? `<section class="queue-section">${sectionHeader("Untriaged investigative leads", groups.candidate.length)}${leadGroups.length ? leadGroupsView(leadGroups, selectedLeadKeys) : `<div class="queue-grid">${groups.candidate.map(queueCard).join("")}</div>`}</section>` : ""}
-    <section class="queue-section">${sectionHeader("Recent collection activity", groups.run.length)}<div class="queue-grid">${groups.run.length ? groups.run.map(queueCard).join("") : `<div class="quiet-empty card"><span>No collection runs recorded yet.</span><button class="button button--small button--ghost" type="button" data-view-action="entities">Open entities</button></div>`}</div></section>
+    <section class="queue-section">${sectionHeader("Recent collection activity", groups.run.length)}<div class="queue-grid">${groups.run.length ? groups.run.map(queueCard).join("") : `<div class="quiet-empty empty-surface card"><span>No collection runs recorded yet.</span><button class="button button--small button--ghost" type="button" data-view-action="entities">Open entities</button></div>`}</div></section>
     <section class="activity-strip"><span>${actorBadge("human")} investigator owns case decisions</span><span>${actorBadge("agent")} runs collection and drafts findings</span><span class="tool-inline"><span class="connection-dot${webmcpState?.available ? " is-ready" : ""}"></span>${toolCount} collection tools available</span></section>
   </div>`;
 }

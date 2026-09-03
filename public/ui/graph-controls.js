@@ -34,7 +34,7 @@ function preferenceButton(field, value, label, selected, disabled = false) {
 }
 
 export function renderPathBreadcrumb(caseData, path) {
-  if (!path?.nodeIds?.length) return '<p class="graph-path-empty">No path is present in the current graph filters.</p>';
+  if (!path?.nodeIds?.length) return '<p class="graph-path-empty" role="status">No path is present in the current graph filters.</p>';
   const entities = new Map((caseData?.entities ?? []).map((entity) => [entity.id, entity]));
   const links = new Map((caseData?.links ?? []).map((link) => [link.id, link]));
   const parts = [];
@@ -58,7 +58,7 @@ export function renderGraphControls(model = {}) {
     : model.pathStartId && model.pathEndId
       ? renderPathBreadcrumb(model.caseData, null)
       : pathMode && model.pathStartId
-        ? '<p class="graph-path-empty">Choose an end entity to complete the path.</p>'
+        ? '<p class="graph-path-empty" role="status">Choose an end entity to complete the path.</p>'
         : "";
 
   return `<section class="graph-control-deck" aria-label="Investigation graph controls">
@@ -81,7 +81,7 @@ export function renderGraphControls(model = {}) {
       <button class="button button--small button--ghost" type="button" data-graph-action="fit-selection"${selectedId ? "" : " disabled"}>Fit selection</button>
       <button class="button button--small button--ghost" type="button" data-graph-action="reset">Reset layout</button>
     </div>
-    <p class="graph-path-instructions">${pathMode ? "Choose a start and end entity to trace the shortest visible relationship path." : "Choose Trace path to select two entities in the current graph."}</p>
+    <p class="graph-path-instructions" aria-live="polite">${pathMode ? "Choose a start and end entity to trace the shortest visible relationship path." : "Choose Trace path to select two entities in the current graph."}</p>
     ${breadcrumb}
     ${densityMessage ? `<p class="graph-density-notice">${escapeHtml(densityMessage)}</p>` : ""}
     <p class="sr-only" aria-live="polite">${pathMode ? (path ? "Path traced." : "Path tracing is active.") : "Graph controls updated."}</p>
