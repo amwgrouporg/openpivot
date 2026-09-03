@@ -7,10 +7,12 @@ import {
   graphEdgeLabelIds,
   graphLabelIds,
   graphListModel,
+  graphInteractionAccessibility,
   mergeGraphPositions,
   nodeStateClasses,
   nodesForFit,
   resetGraphLayoutNodes,
+  reconcileGraphNode,
   settleImmediately,
 } from "../public/graph.js";
 import { newCase } from "../public/store.js";
@@ -40,6 +42,32 @@ test("graph hides rejected relationships unless the filter requests them", () =>
 test("graph model carries saved node positions into rendering", () => {
   const node = graphListModel(graphCase(), {}).nodes.find((item) => item.id === "ent_1");
   assert.deepEqual(node.position, { x: 120, y: 80 });
+});
+
+test("full graph updates preserve newer live drag coordinates over stale persisted positions", () => {
+  const live = { id: "ent_1", x: 311, y: 177, vx: 2, vy: -1 };
+  const model = { id: "ent_1", type: "domain", value: "example.com" };
+
+  const reconciled = reconcileGraphNode(live, model, { x: 120, y: 80 });
+
+  assert.equal(reconciled, live);
+  assert.deepEqual({ x: reconciled.x, y: reconciled.y, vx: reconciled.vx, vy: reconciled.vy }, { x: 311, y: 177, vx: 2, vy: -1 });
+  assert.equal(reconciled.type, "domain");
+});
+
+test("interaction accessibility names refresh path membership without a full graph update", () => {
+  const nodes = [
+    { id: "a", type: "domain", value: "example.com", added_by: "human", metadata: {} },
+    { id: "b", type: "ip", value: "192.0.2.1", added_by: "agent", metadata: {} },
+  ];
+  const links = [{ id: "ab", from: "a", to: "b", relationship_type: "resolves_to", status: "accepted", asserted_by: "agent", rationale: "DNS", citations: [] }];
+
+  const before = graphInteractionAccessibility(nodes, links, { pathNodeIds: [], pathLinkIds: [] });
+  const after = graphInteractionAccessibility(nodes, links, { pathNodeIds: ["a", "b"], pathLinkIds: ["ab"] });
+
+  assert.doesNotMatch(before.relationshipNames.get("ab"), /included in traced path/);
+  assert.match(after.relationshipNames.get("ab"), /included in traced path/);
+  assert.match(after.nodeNames.get("a"), /included in traced path/);
 });
 
 test("graph list compatibility wrapper preserves the analysis density summary", () => {

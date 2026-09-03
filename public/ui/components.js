@@ -75,10 +75,10 @@ export function actorBadge(actor) {
   return `<span class="badge badge--actor badge--${value}"><span class="actor-dot"></span><span>${label}</span></span>`;
 }
 
-export function typeBadge(type) {
+export function typeBadge(type, label = type) {
   const value = String(type ?? "unknown");
   const color = TYPE_COLORS[value] ?? "#9aa7b7";
-  return `<span class="badge badge--type" style="--type-color:${color}"><span class="type-mark"></span><span>${escapeHtml(value)}</span></span>`;
+  return `<span class="badge badge--type" style="--type-color:${color}"><span class="type-mark"></span><span>${escapeHtml(label)}</span></span>`;
 }
 
 export function sectionHeader(title, count, action = "") {

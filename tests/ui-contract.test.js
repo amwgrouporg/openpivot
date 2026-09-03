@@ -377,6 +377,16 @@ test("graph legend is complete and open for desktop rendering", () => {
   for (const phrase of ["Domain", "IP address", "Agent-added", "Retrieved", "Collection inconclusive", "Accepted into case", "Pending analyst review", "Rejected by analyst", "Traced path", "Evidence count"]) {
     assert.match(html, new RegExp(phrase));
   }
+  for (const [type, label, color] of [
+    ["domain", "Domain", "#6ea8fe"],
+    ["ip", "IP address", "#f2bd4a"],
+    ["url", "URL", "#59d48b"],
+    ["org", "Organization", "#bd91ff"],
+    ["document", "Document", "#9aa7b7"],
+    ["claim", "Claim", "#ff7b72"],
+  ]) {
+    assert.match(html, new RegExp(`data-legend-type="${type}"[\\s\\S]*?--type-color:${color}[\\s\\S]*?>${label}<`));
+  }
 });
 
 test("default graph relationship filter is labelled accepted plus pending", () => {

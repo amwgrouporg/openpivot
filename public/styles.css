@@ -331,6 +331,9 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
 .graph-legend-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 12px; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--line); }
 .graph-legend p { display: grid; gap: 2px; margin: 0; }
 .graph-legend strong { color: var(--text-soft); }
+.graph-legend-section { display: grid; gap: 5px; }
+.graph-legend-types { display: flex; flex-wrap: wrap; gap: 4px; }
+.graph-legend-types .badge { background: rgba(7,17,29,.42); }
 .filter-chip { min-height: 28px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; background: transparent; color: var(--muted); cursor: pointer; font-size: 10px; }
 .filter-chip:hover, .filter-chip.is-active { border-color: rgba(105,169,255,.5); background: var(--blue-wash); color: var(--text); }
 .filter-chip:disabled { opacity: .38; cursor: default; }

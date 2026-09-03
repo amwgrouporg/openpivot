@@ -1,4 +1,4 @@
-import { escapeHtml } from "./components.js";
+import { escapeHtml, typeBadge } from "./components.js";
 import { relationshipTypeLabel } from "./copy.js";
 import { shortestPath } from "../graph-model.js";
 
@@ -8,6 +8,15 @@ const GRAPH_PREFERENCES = {
   graph_activity_window: ["all", "24h", "7d", "30d"],
   graph_labels: ["auto", "all", "focus"],
 };
+
+const ENTITY_TYPE_LEGEND = [
+  ["domain", "Domain"],
+  ["ip", "IP address"],
+  ["url", "URL"],
+  ["org", "Organization"],
+  ["document", "Document"],
+  ["claim", "Claim"],
+];
 
 export function graphPreferenceUpdate(caseData, name, value) {
   const validValues = GRAPH_PREFERENCES[name];
@@ -102,7 +111,7 @@ export function renderGraphControls(model = {}) {
     ${densityMessage ? `<p class="graph-density-notice">${escapeHtml(densityMessage)}</p>` : ""}
     <p class="sr-only" aria-live="polite">${pathMode ? (path ? "Path traced." : "Path tracing is active.") : "Graph controls updated."}</p>
     <details class="graph-legend"${desktopOpen ? " open" : ""}><summary>Graph legend</summary><div class="graph-legend-grid">
-      <p><strong>Entity types</strong>Domain · IP address · URL · Organization · Document · Claim</p>
+      <div class="graph-legend-section"><strong>Entity types</strong><div class="graph-legend-types" aria-label="Entity type colors">${ENTITY_TYPE_LEGEND.map(([type, label]) => `<span data-legend-type="${type}">${typeBadge(type, label)}</span>`).join("")}</div></div>
       <p><strong>Provenance</strong>Solid ring: investigator-added · dashed violet ring: Agent-added</p>
       <p><strong>Collection</strong>Azure ring: Retrieved · amber dashed ring: Collection inconclusive · muted ring: no collection results</p>
       <p><strong>Review state</strong>Solid line: Accepted into case · amber dashed line: Pending analyst review · dotted line: Rejected by analyst</p>

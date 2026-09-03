@@ -159,6 +159,24 @@ export function restoreGraphFocus(root, descriptor) {
   return Boolean(target);
 }
 
+export function reconcileGraphNode(previous = {}, modelNode = {}, persistedPosition = {}) {
+  const live = Number.isFinite(previous.x) && Number.isFinite(previous.y);
+  const liveState = live ? { x: previous.x, y: previous.y, vx: previous.vx, vy: previous.vy, fx: previous.fx, fy: previous.fy } : null;
+  Object.assign(previous, modelNode);
+  if (liveState) Object.assign(previous, liveState);
+  else Object.assign(previous, persistedPosition);
+  return previous;
+}
+
+export function graphInteractionAccessibility(nodes, links, { pathNodeIds = [], pathLinkIds = [] } = {}) {
+  const nodePath = pathNodeIds instanceof Set ? pathNodeIds : new Set(pathNodeIds);
+  const linkPath = pathLinkIds instanceof Set ? pathLinkIds : new Set(pathLinkIds);
+  return {
+    nodeNames: new Map((nodes ?? []).map((node) => [node.id, nodeAccessibleName({ ...node, inPath: nodePath.has(node.id) })])),
+    relationshipNames: new Map((links ?? []).map((link) => [link.id, relationshipAccessibleName(link, nodes, { inPath: linkPath.has(link.id) })])),
+  };
+}
+
 export function graphEdgeLabelIds(nodes, links, {
   requested = "auto",
   selectedId = null,
@@ -443,6 +461,7 @@ export function createGraph(svgEl, options = {}) {
 
   function applyPresentation() {
     const neighbors = neighborIds();
+    const accessibility = graphInteractionAccessibility(nodesRef, activeLayoutLinks, { pathNodeIds: pathNodeIdsRef, pathLinkIds: pathLinkIdsRef });
     labelIdsRef = graphLabelIds(nodesRef, activeLayoutLinks, {
       requested: requestedLabels,
       selectedId: selectedEntityId,
@@ -461,7 +480,8 @@ export function createGraph(svgEl, options = {}) {
       const context = { selectedId: selectedEntityId, hoveredId: hoveredEntityId, neighborIds: neighbors, pathNodeIds: pathNodeIdsRef };
       allNodesRef
         .attr("class", (item) => nodeStateClasses(item.id, context))
-        .attr("aria-label", (item) => nodeAccessibleName({ ...item, inPath: pathNodeIdsRef.has(item.id) }));
+        .attr("aria-label", (item) => accessibility.nodeNames.get(item.id));
+      allNodesRef.select("title").text((item) => accessibility.nodeNames.get(item.id));
       allNodesRef.select("circle.node-halo").attr("stroke", (item) => item.id === selectedEntityId ? "#8fc0ff" : "transparent");
       allNodesRef.select("text.node-label").attr("display", (item) => labelIdsRef.has(item.id) ? null : "none");
       allNodesRef.select("rect.node-label-backing").attr("display", (item) => labelIdsRef.has(item.id) ? null : "none");
@@ -484,7 +504,8 @@ export function createGraph(svgEl, options = {}) {
         if (item.contextual) classes.push("is-contextual");
         if ((selectedLinkId || hoveredLinkId) && item.id !== selectedLinkId && item.id !== hoveredLinkId && !pathLinkIdsRef.has(item.id)) classes.push("is-dimmed");
         return classes.join(" ");
-      });
+      }).attr("aria-label", (item) => accessibility.relationshipNames.get(item.id));
+      allLinksRef.select("title").text((item) => accessibility.relationshipNames.get(item.id));
       allLinksRef.select("text.edge-label").attr("display", (item) => edgeLabelIds.has(item.id) ? null : "none");
       allLinksRef.select("text.edge-citation").attr("display", (item) => edgeLabelIds.has(item.id) && (item.citations?.length ?? 0) > 0 ? null : "none");
     }
@@ -521,7 +542,7 @@ export function createGraph(svgEl, options = {}) {
     const nodes = model.nodes.map((node) => {
       const previous = positions.get(node.id) ?? {};
       const positioned = node.position ?? {};
-      const next = Object.assign(previous, node, positioned);
+      const next = reconcileGraphNode(previous, node, positioned);
       positions.set(node.id, next);
       return next;
     });

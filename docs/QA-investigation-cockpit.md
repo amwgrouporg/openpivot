@@ -11,11 +11,11 @@ Command:
 node --test tests/*.test.js
 ```
 
-Final result: 169 tests passed, 0 failed, 0 skipped, 0 cancelled, 0 todo.
+Final result: 208 tests passed, 0 failed, 0 skipped, 0 cancelled, 0 todo.
 
-The 250-entity / 500-relationship pure graph model completed in **21.768621 ms** against a
+The 250-entity / 500-relationship pure graph model completed in **20.840352 ms** against a
 100 ms budget. The measurement uses the same synthetic case and filter options as
-`tests/graph-performance.test.js`; the enclosing test took 23.380281 ms in the final full-suite run.
+`tests/graph-performance.test.js` in the final full-suite run.
 
 ### Complete browser graph performance
 
@@ -190,6 +190,9 @@ exact values remain in the entity list and semantic alternative.
 - Verdicts made from a Proposed-only filter switch to a containing filter before restoring card focus.
 - Processing every visible lead returns focus to the review-priorities heading when the triage toolbar disappears.
 - Reduced-motion graph resets settle and repaint synchronously.
+- Entity-type legend entries visibly map all six types to the same colors used on graph nodes.
+- Starting and clearing a traced path refreshes SVG node and relationship accessible names and titles in place.
+- A full graph update preserves newer live drag coordinates instead of reapplying stale persisted positions.
 
 ## Defects found and corrected during QA
 
@@ -205,5 +208,10 @@ exact values remain in the entity list and semantic alternative.
 10. Batch triage initially targeted a toolbar that disappears when the final lead is processed. Browser QA confirmed focus now lands on the resulting review heading.
 11. Relationship-map Reset layout deleted D3 coordinates after simulation initialization and collapsed every node to `(0,0)`. Force reset now seeds a deterministic ring before restarting; browser QA measured six distinct finite positions.
 12. Adjacent parallel paths were separated by only 9 px at their midpoint while each pointer hit target was 18 px wide. Deterministic curve offsets now provide 20 px midpoint separation, and direct pointer plus keyboard selection each opened the intended reverse edge.
+13. Reading retention could evict a result still referenced by evidence or a relationship. Retention is now reference-aware and may exceed the soft cap rather than corrupt the case.
+14. Deferred pivots could commit into a removed entity or replaced case. Pivot results now stage atomically and require a current case/entity revision before commit.
+15. Routine entity-view updates recreated the graph and lost zoom, focus, and pending positions. The mounted graph now updates in place, flushes true teardown state, and preserves target-scale search and selection interaction.
+16. Graph filters, semantic alternatives, relationship cues, import access, contrast, candidate merging, entity-note authority, and WebMCP read-only annotations were corrected and covered by focused regression tests.
+17. Final review found three residual presentation/state issues: stale persisted coordinates could overwrite a just-dragged node, the legend omitted entity-color mapping, and in-place path changes left stale SVG accessibility text. All three now have regressions and live browser confirmation where applicable.
 
 Final browser console: no warnings or errors.
