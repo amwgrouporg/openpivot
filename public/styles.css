@@ -453,8 +453,6 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
 .source-record p { margin: 0; color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @media (max-width: 1000px) {
-  .workspace-frame { position: relative; grid-template-columns: 1fr !important; }
-  .workbench.is-open { position: absolute; z-index: 35; inset: 0 0 0 auto; width: min(390px, calc(100% - 64px)); }
   .page-header { align-items: flex-start; flex-direction: column; }
   .page-actions { width: 100%; flex-wrap: wrap; }
   .composer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -465,10 +463,6 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
 @media (max-width: 999px) {
   .graph-minimap { display: none; }
   .graph-hover-status { max-width: calc(100% - 20px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .graph-edge, .graph-node, .edge-line { transition: none; }
 }
 
 @media (max-width: 1199px) {
@@ -482,7 +476,6 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
   .desktop-nav .nav-count { position: absolute; right: 2px; top: 2px; min-width: 15px; height: 15px; font-size: 8px; background: var(--ink-2); }
   .activity-button { justify-content: center; }
   .topbar-stats { display: none; }
-  .workspace-frame:has(.workbench.is-open) { grid-template-columns: minmax(0, 1fr) minmax(330px, 390px); }
   .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .entity-workspace { grid-template-columns: minmax(0, 1fr) 210px; }
 }
@@ -491,8 +484,8 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
   :root { --workbench-overlay-width: clamp(320px, 35vw, 390px); }
   .workspace-frame, .workspace-frame:has(.workbench.is-open) { position: relative; grid-template-columns: 1fr !important; }
   .workbench.is-open { position: absolute; z-index: 35; inset: 0 0 0 auto; width: var(--workbench-overlay-width); border-left: 1px solid var(--line); }
-  .workspace-frame:has(.workbench.is-open) .graph-filter-bar,
-  .workspace-frame:has(.workbench.is-open) .graph-control-deck { margin-right: calc(var(--workbench-overlay-width) + 12px); }
+  .workspace-frame:has(.workbench.is-open) .main-surface { padding-right: calc(var(--workbench-overlay-width) + clamp(20px, 2.4vw, 34px)); }
+  .workspace-frame:has(.workbench.is-open) .entity-workspace { grid-template-columns: minmax(0, 1fr); }
   .graph-control-deck { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .graph-control-group { align-items: stretch; }
   .graph-control-deck .graph-control-group .button { flex: 1 1 auto; }

@@ -4,7 +4,7 @@ import { actorBadge, entityGlyph, safeLink, statusBadge, typeBadge } from "../pu
 import { renderShell } from "../public/ui/shell.js";
 import { renderOverview } from "../public/ui/overview.js";
 import { renderEntities } from "../public/ui/entities.js";
-import { captureFormState, commandKeyAction, createCaseActions, leadTriageFocusSelector, resetTransientUi, restoreFormState } from "../public/ui/events.js";
+import { captureFormState, captureSearchReturnTarget, commandKeyAction, createCaseActions, focusReturnTarget, leadTriageFocusSelector, resetTransientUi, resolveFocusTarget, restoreFormState } from "../public/ui/events.js";
 import { relationshipFocusFilter, renderRelationships } from "../public/ui/relationships.js";
 import { renderEvidence } from "../public/ui/evidence.js";
 import { renderReport } from "../public/ui/report.js";
@@ -79,6 +79,47 @@ test("command key opens search and Escape closes it", () => {
   assert.equal(commandKeyAction({ key: "k", ctrlKey: true }, { searchOpen: false }), "open-search");
   assert.equal(commandKeyAction({ key: "Escape" }, { searchOpen: true }), "close-search");
   assert.equal(commandKeyAction({ key: "k", metaKey: true }, { searchOpen: false, modalOpen: true }), null);
+});
+
+test("search focus identity restores exact repeated and attributed controls", () => {
+  const element = (tagName, attributes = {}) => ({
+    tagName: tagName.toUpperCase(),
+    id: attributes.id ?? "",
+    getAttribute(name) { return attributes[name] ?? null; },
+  });
+  const firstEntity = element("button", { "data-action": "select-entity", "data-id": "ent_1" });
+  const secondEntity = element("button", { "data-action": "select-entity", "data-id": "ent_2" });
+  const lead = element("input", { type: "checkbox", "data-lead-key": "ent_2:domain:next.example" });
+  const firstSource = element("a", { href: "https://example.com/source" });
+  const secondSource = element("a", { href: "https://example.com/source" });
+  const root = {
+    querySelectorAll(selector) {
+      if (selector.includes('data-id="ent_2"')) return [secondEntity];
+      if (selector.includes("data-lead-key")) return [lead];
+      if (selector.startsWith("a[href=")) return [firstSource, secondSource];
+      return [firstEntity, secondEntity, lead, firstSource, secondSource];
+    },
+  };
+
+  const entityTarget = focusReturnTarget(secondEntity, root);
+  const leadTarget = focusReturnTarget(lead, root);
+  const sourceTarget = focusReturnTarget(secondSource, root);
+
+  assert.match(entityTarget.selector, /data-action="select-entity".*data-id="ent_2"/);
+  assert.equal(resolveFocusTarget(root, entityTarget), secondEntity);
+  assert.match(leadTarget.selector, /data-lead-key="ent_2:domain:next\.example"/);
+  assert.equal(resolveFocusTarget(root, leadTarget), lead);
+  assert.match(sourceTarget.selector, /^a\[href=/);
+  assert.equal(sourceTarget.index, 1);
+  assert.equal(resolveFocusTarget(root, sourceTarget), secondSource);
+});
+
+test("repeated search shortcut preserves the original focus return target", () => {
+  const original = { selector: '.entity-row[data-id="ent_2"]', index: 0 };
+  const search = { tagName: "INPUT", id: "case-search", getAttribute() { return null; } };
+  const root = { querySelectorAll() { return [search]; } };
+
+  assert.equal(captureSearchReturnTarget(original, search, root), original);
 });
 
 test("shell exposes local-search shortcut and visual-system hooks", () => {

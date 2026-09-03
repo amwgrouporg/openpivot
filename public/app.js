@@ -12,7 +12,7 @@ import { escapeHtml, icon } from "./ui/components.js";
 import { renderShell } from "./ui/shell.js";
 import { renderOverview } from "./ui/overview.js";
 import { renderEntities } from "./ui/entities.js";
-import { captureFormState, commandKeyAction, createCaseActions, leadTriageFocusSelector, parseCandidate, resetTransientUi, restoreFormState } from "./ui/events.js";
+import { captureFormState, captureSearchReturnTarget, commandKeyAction, createCaseActions, leadTriageFocusSelector, parseCandidate, resetTransientUi, resolveFocusTarget, restoreFormState } from "./ui/events.js";
 import { relationshipFocusFilter, renderRelationships } from "./ui/relationships.js";
 import { renderEvidence } from "./ui/evidence.js";
 import { renderReport } from "./ui/report.js";
@@ -295,24 +295,11 @@ function restoreReturnFocus() {
 
 function focusSelector(selector) {
   requestAnimationFrame(() => {
-    const targets = [...app.querySelectorAll(selector)];
-    const target = targets.find((candidate) => candidate.getClientRects().length && !candidate.disabled) ?? targets[0];
+    const target = resolveFocusTarget(app, selector);
     if (!target) return;
     if (!target.matches("button, input, select, textarea, a[href], [tabindex]")) target.setAttribute("tabindex", "-1");
     target.focus();
   });
-}
-
-function focusReturnSelector(element) {
-  if (!element || element === document.body) return ".main-surface h1";
-  if (element.id) return `#${CSS.escape(element.id)}`;
-  for (const name of ["action", "viewAction", "graphAction", "control"]) {
-    const value = element.dataset?.[name];
-    if (!value) continue;
-    const attribute = name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
-    return `[data-${attribute}="${CSS.escape(value)}"]`;
-  }
-  return ".main-surface h1";
 }
 
 function download(text, type, filename) {
@@ -471,7 +458,7 @@ document.addEventListener("keydown", (event) => {
   if (commandAction === "open-search") {
     event.preventDefault();
     ui.searchOpen = true;
-    ui.searchReturnFocus = focusReturnSelector(document.activeElement);
+    ui.searchReturnFocus = captureSearchReturnTarget(ui.searchReturnFocus, document.activeElement, app);
     const search = app.querySelector("#case-search");
     search?.closest(".case-search")?.classList.add("is-command-open");
     search?.focus();

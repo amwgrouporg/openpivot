@@ -7,6 +7,45 @@ export function commandKeyAction(event, state = {}) {
   return null;
 }
 
+const FOCUS_ATTRIBUTES = [
+  "data-action", "data-view-action", "data-graph-action", "data-graph-preference", "data-graph-type",
+  "data-control", "data-id", "data-key", "data-lead-key", "data-parent", "href", "name", "type",
+];
+
+function attributeSelector(name, value) {
+  const escaped = String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\a ");
+  return `[${name}="${escaped}"]`;
+}
+
+export function focusReturnTarget(element, root) {
+  if (!element) return { selector: ".main-surface h1", index: 0 };
+  const tag = String(element.tagName ?? "").toLowerCase();
+  if (!tag || tag === "body" || tag === "html") return { selector: ".main-surface h1", index: 0 };
+  const selector = element.id
+    ? `#${globalThis.CSS?.escape ? globalThis.CSS.escape(element.id) : String(element.id).replace(/[^a-zA-Z0-9_-]/g, "\\$&")}`
+    : `${tag}${FOCUS_ATTRIBUTES.flatMap((name) => {
+      const value = element.getAttribute?.(name);
+      return value == null || value === "" ? [] : [attributeSelector(name, value)];
+    }).join("")}`;
+  const matches = [...(root?.querySelectorAll?.(selector) ?? [])];
+  const index = matches.indexOf(element);
+  return { selector, index: index < 0 ? 0 : index };
+}
+
+export function captureSearchReturnTarget(current, element, root) {
+  return current ?? focusReturnTarget(element, root);
+}
+
+export function resolveFocusTarget(root, target) {
+  const descriptor = typeof target === "string" ? { selector: target, index: null } : target;
+  if (!descriptor?.selector) return null;
+  const matches = [...(root?.querySelectorAll?.(descriptor.selector) ?? [])];
+  const indexed = Number.isInteger(descriptor.index) ? matches[descriptor.index] : null;
+  const isVisible = (element) => !element?.disabled && (typeof element.getClientRects !== "function" || element.getClientRects().length > 0);
+  if (indexed && isVisible(indexed)) return indexed;
+  return matches.find(isVisible) ?? indexed ?? matches[0] ?? null;
+}
+
 export function createCaseActions({ getCase, persist, setUi, runEntityPivot }) {
   let removalSnapshot = null;
   const save = ({ preserveUndo = false } = {}) => {
