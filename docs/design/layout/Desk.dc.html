@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+  <style>
+    :root{--line:#5f82a0;--text:#edf3f9;--text-soft:#bdcad7;--muted:#899bad;--blue:#70b5ff;--blue-wash:rgba(72,151,246,.13);--amber:#efbd58;--green:#5bd69a;--sans:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+    body{margin:0;background:#07111d;color:#edf3f9;font:13px/1.5 var(--sans)}
+    *{box-sizing:border-box}
+    a{color:#9ac7ff}a:hover{color:#b8d8ff}
+    .wire{border:1px dashed rgba(115,149,178,.62);border-radius:8px;background:rgba(17,34,53,.45)}
+    .wire-solid{border:1px solid #5f82a0;border-radius:8px;background:rgba(9,21,34,.85)}
+    .tag{color:var(--muted);font:600 10px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+    .line{height:8px;border-radius:4px;background:rgba(137,155,173,.28)}
+    .nav{display:flex;align-items:center;gap:10px;min-height:36px;padding:6px 10px;border-radius:8px;color:var(--muted)}
+    .nav.is-on{background:linear-gradient(90deg,rgba(64,145,243,.16),rgba(64,145,243,.055));color:#afd6ff}
+    .pill{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:4px 9px;border:1px solid #5f82a0;border-radius:999px;color:var(--muted);font:600 10px/1 var(--mono)}
+    .pill.is-on{background:var(--blue-wash);color:#afd6ff}
+    .btn{display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:5px 11px;border:1px solid #5f82a0;border-radius:8px;color:var(--text);font-weight:600;font-size:12px;white-space:nowrap}
+    .btn.primary{border-color:rgba(124,190,255,.86);background:linear-gradient(180deg,#4597ff,#358bf8);color:#07111d}
+    .btn.danger{border-color:rgba(255,118,110,.28);background:rgba(255,100,94,.11);color:#ffaaa4}
+    .mark{width:8px;height:8px;border-radius:2px}
+    .tab{padding:8px 12px;border-bottom:2px solid transparent;color:var(--muted);font-weight:600;font-size:12px}
+    .tab.is-on{border-bottom-color:#70b5ff;color:#afd6ff}
+    .row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px}
+  </style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; display: grid; grid-template-columns: 216px minmax(0, 1fr); grid-template-rows: 64px minmax(0, 1fr) 30px; background: linear-gradient(155deg, #08131f 0%, #07111d 52%, #091521 100%);">
+  <header style="grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 20px; border-bottom: 1px solid rgba(75,111,142,.58); background: rgba(10,24,38,.88);">
+    <span style="font-weight: 700;">OpenPivot</span>
+    <span class="tag">Direction B · Investigation desk</span>
+    <div class="wire" style="flex: 1; height: 34px; display: flex; align-items: center; padding: 0 12px; color: var(--muted); font-size: 12px;">Case title · search · counts · Export · New case (unchanged)</div>
+  </header>
+  <aside style="grid-column: 1; grid-row: 2; display: flex; flex-direction: column; gap: 4px; padding: 14px 10px; border-right: 1px solid rgba(66,100,130,.58); background: rgba(9,23,37,.76);">
+    <div class="wire" style="height: 64px; margin-bottom: 10px;"></div>
+    <span class="nav is-on">Desk</span>
+    <span class="nav">Findings</span>
+    <span class="nav" style="color: #5f7387;">Overview, Relationships and Evidence fold into the desk</span>
+    <div style="flex: 1;"></div>
+    <span class="nav">Audit trail</span>
+  </aside>
+
+  <div style="grid-column: 2; grid-row: 2; display: grid; grid-template-columns: 280px minmax(0, 1fr) 400px; min-width: 0; min-height: 0;">
+    <!-- Ledger -->
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 14px; border-right: 1px solid #5f82a0; background: rgba(9,23,37,.6);">
+      <span class="tag">Ledger</span>
+      <div style="display: flex; gap: 6px;"><div class="wire-solid" style="flex: 1; height: 34px; display: flex; align-items: center; padding: 0 10px; color: var(--muted); font: 12px var(--mono);">add selector…</div><span class="btn primary">Add</span></div>
+      <span class="tag">Domains · 3</span>
+      <div class="row" style="background: var(--blue-wash);"><span class="mark" style="background: #6ea8fe;"></span><span class="line" style="width: 160px;"></span></div>
+      <div class="row"><span class="mark" style="background: #6ea8fe;"></span><span class="line" style="width: 140px;"></span></div>
+      <div class="row"><span class="mark" style="background: #6ea8fe;"></span><span class="line" style="width: 140px;"></span></div>
+      <span class="tag">IPs · 1</span>
+      <div class="row"><span class="mark" style="background: #f2bd4a;"></span><span class="line" style="width: 110px;"></span></div>
+      <span class="tag">URLs · 1</span>
+      <div class="row"><span class="mark" style="background: #59d48b;"></span><span class="line" style="width: 180px;"></span></div>
+      <span class="tag">Organizations · 1</span>
+      <div class="row"><span class="mark" style="background: #bd91ff;"></span><span class="line" style="width: 120px;"></span></div>
+      <div style="flex: 1;"></div>
+      <span class="tag">Review queue</span>
+      <div class="wire-solid" style="padding: 10px; display: grid; gap: 6px; font-size: 12px;">
+        <div style="display: flex; justify-content: space-between;"><span>Relationships pending</span><strong style="color: #f2ce83;">2</strong></div>
+        <div style="display: flex; justify-content: space-between;"><span>Inconclusive collection</span><strong style="color: #f2ce83;">1</strong></div>
+        <div style="display: flex; justify-content: space-between;"><span>Untriaged leads</span><strong>6</strong></div>
+      </div>
+    </div>
+    <!-- Graph -->
+    <div style="position: relative; min-width: 0; min-height: 0; background-color: rgba(7,17,29,.94); background-image: radial-gradient(rgba(91,122,151,.34) .75px, transparent .75px); background-size: 24px 24px;">
+      <div class="wire-solid" style="position: absolute; left: 12px; right: 12px; top: 12px; height: 38px; display: flex; align-items: center; justify-content: space-between; padding: 0 10px;">
+        <div style="display: flex; gap: 6px;"><span class="pill is-on">map</span><span class="pill">lanes</span><span class="pill">radial</span><span class="pill is-on">all</span><span class="pill">1 hop</span><span class="pill">2 hops</span></div>
+        <div style="display: flex; gap: 6px;"><span class="pill">fit</span><span class="pill">reset</span><span class="pill">legend</span></div>
+      </div>
+      <svg viewBox="0 0 544 806" style="position: absolute; inset: 0; width: 100%; height: 100%;" aria-label="Graph in the centre pane">
+        <line x1="272" y1="400" x2="420" y2="500" stroke="#78a9d4" stroke-width="1.7"/>
+        <line x1="272" y1="400" x2="150" y2="560" stroke="#78a9d4" stroke-width="1.7"/>
+        <line x1="272" y1="400" x2="330" y2="640" stroke="#78a9d4" stroke-width="1.7"/>
+        <line x1="272" y1="400" x2="380" y2="230" stroke="#78a9d4" stroke-width="1.7"/>
+        <line x1="272" y1="400" x2="120" y2="270" stroke="#e6b85c" stroke-width="1.7" stroke-dasharray="6 5"/>
+        <circle cx="272" cy="400" r="16" fill="#6ea8fe"/><circle cx="272" cy="400" r="23" fill="none" stroke="#8fc0ff" stroke-width="2"/>
+        <circle cx="420" cy="500" r="12" fill="#f2bd4a"/><circle cx="150" cy="560" r="12" fill="#6ea8fe"/><circle cx="330" cy="640" r="12" fill="#6ea8fe"/><circle cx="380" cy="230" r="12" fill="#59d48b"/><circle cx="120" cy="270" r="12" fill="#bd91ff"/>
+        <text x="272" y="770" text-anchor="middle" style="fill: #899bad; font: 600 11px 'SFMono-Regular', Consolas, monospace; letter-spacing: .06em;">GRAPH · FULL HEIGHT · 544 PX WIDE AT 1440</text>
+      </svg>
+    </div>
+    <!-- Inspector with tabs -->
+    <aside style="display: flex; flex-direction: column; gap: 12px; padding: 12px 18px 16px; border-left: 1px solid #5f82a0; background: rgba(11,24,38,.94);">
+      <div style="display: flex; border-bottom: 1px solid #5f82a0;"><span class="tab">Entity</span><span class="tab is-on">Relationships · 2</span><span class="tab">Evidence · 1</span></div>
+      <span class="tag">Pending analyst review · inline</span>
+      <div class="wire-solid" style="padding: 12px; display: grid; gap: 8px; border-left: 3px solid #efbd58;">
+        <div style="display: flex; align-items: center; gap: 8px; font: 600 12px var(--mono);"><span>northwind-logistics.example</span><span style="color: var(--muted);">→</span><span>Baltic Freight OU</span></div>
+        <span class="pill" style="width: fit-content;">associated with</span>
+        <div class="line" style="width: 90%;"></div><div class="line" style="width: 70%;"></div>
+        <span class="tag">Citation · extract reading</span>
+        <div style="display: flex; gap: 6px; justify-content: flex-end;"><span class="btn danger">Reject</span><span class="btn primary">Accept into case</span></div>
+      </div>
+      <div class="wire-solid" style="padding: 12px; display: grid; gap: 8px; border-left: 3px solid #efbd58;">
+        <div style="display: flex; align-items: center; gap: 8px; font: 600 12px var(--mono);"><span>203.0.113.42</span><span style="color: var(--muted);">→</span><span>AS64496 Harbourline</span></div>
+        <span class="pill" style="width: fit-content;">hosted on</span>
+        <div class="line" style="width: 80%;"></div>
+        <span class="tag">No citation · review carefully</span>
+        <div style="display: flex; gap: 6px; justify-content: flex-end;"><span class="btn danger">Reject</span><span class="btn primary">Accept into case</span></div>
+      </div>
+      <span class="tag">Accepted · 4 · collapsed</span>
+      <div class="wire" style="height: 34px;"></div><div class="wire" style="height: 34px;"></div>
+    </aside>
+  </div>
+  <footer style="grid-column: 1 / -1; grid-row: 3; display: flex; align-items: center; padding: 0 12px; border-top: 1px solid rgba(65,98,127,.58); background: rgba(7,17,29,.94); color: var(--muted); font: 10px var(--mono);">● 13 collection tools available · WebMCP connected (unchanged)</footer>
+</div>
+</x-dc>
+</body>
+</html>

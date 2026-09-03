@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+  <style>
+    :root{--line:#5f82a0;--text:#edf3f9;--text-soft:#bdcad7;--muted:#899bad;--blue:#70b5ff;--blue-wash:rgba(72,151,246,.13);--amber:#efbd58;--green:#5bd69a;--sans:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+    body{margin:0;background:#07111d;color:#edf3f9;font:13px/1.5 var(--sans)}
+    *{box-sizing:border-box}
+    a{color:#9ac7ff}a:hover{color:#b8d8ff}
+    .wire{border:1px dashed rgba(115,149,178,.62);border-radius:8px;background:rgba(17,34,53,.45)}
+    .wire-solid{border:1px solid #5f82a0;border-radius:8px;background:rgba(9,21,34,.85)}
+    .tag{color:var(--muted);font:600 10px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+    .line{height:8px;border-radius:4px;background:rgba(137,155,173,.28)}
+    .nav{display:flex;align-items:center;gap:10px;min-height:36px;padding:6px 10px;border-radius:8px;color:var(--muted)}
+    .nav.is-on{background:linear-gradient(90deg,rgba(64,145,243,.16),rgba(64,145,243,.055));color:#afd6ff}
+    .pill{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:4px 9px;border:1px solid #5f82a0;border-radius:999px;color:var(--muted);font:600 10px/1 var(--mono)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:5px 11px;border:1px solid #5f82a0;border-radius:8px;color:var(--text);font-weight:600;font-size:12px;white-space:nowrap}
+    .btn.primary{border-color:rgba(124,190,255,.86);background:linear-gradient(180deg,#4597ff,#358bf8);color:#07111d}
+    .btn.danger{border-color:rgba(255,118,110,.28);background:rgba(255,100,94,.11);color:#ffaaa4}
+    .queue-item{display:grid;gap:5px;padding:10px 12px;border:1px solid transparent;border-radius:8px}
+    .queue-item.is-on{border-color:rgba(105,169,255,.34);background:var(--blue-wash)}
+    .step{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+    .step .n{display:grid;place-items:center;width:22px;height:22px;border:1px solid #5f82a0;border-radius:50%;font:600 10px var(--mono)}
+    .step.done{color:#8ce8b9}.step.done .n{border-color:rgba(91,214,154,.5);background:rgba(56,190,126,.12)}
+    .step.now{color:#afd6ff}.step.now .n{border-color:#70b5ff;background:var(--blue-wash)}
+  </style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; display: grid; grid-template-columns: 216px minmax(0, 1fr); grid-template-rows: 64px minmax(0, 1fr) 30px; background: linear-gradient(155deg, #08131f 0%, #07111d 52%, #091521 100%);">
+  <header style="grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 20px; border-bottom: 1px solid rgba(75,111,142,.58); background: rgba(10,24,38,.88);">
+    <span style="font-weight: 700;">OpenPivot</span>
+    <span class="tag">Direction C · Guided queue</span>
+    <div class="wire" style="flex: 1; height: 34px; display: flex; align-items: center; padding: 0 12px; color: var(--muted); font-size: 12px;">Case title · search · counts · Export · New case (unchanged)</div>
+  </header>
+  <aside style="grid-column: 1; grid-row: 2; display: flex; flex-direction: column; gap: 4px; padding: 14px 10px; border-right: 1px solid rgba(66,100,130,.58); background: rgba(9,23,37,.76);">
+    <div class="wire" style="height: 64px; margin-bottom: 10px;"></div>
+    <span class="nav is-on">Home · queue</span>
+    <span class="nav">Graph</span>
+    <span class="nav">Evidence</span>
+    <span class="nav">Findings</span>
+    <div style="flex: 1;"></div>
+    <span class="nav">Audit trail</span>
+  </aside>
+
+  <div style="grid-column: 2; grid-row: 2; display: flex; flex-direction: column; min-width: 0; min-height: 0;">
+    <div style="display: flex; align-items: center; gap: 28px; padding: 10px 20px; border-bottom: 1px solid rgba(58,88,114,.62); background: rgba(8,21,34,.68);">
+      <span class="step done"><span class="n">1</span>Define objective and scope</span>
+      <span class="step done"><span class="n">2</span>Add the first selector</span>
+      <span class="step now"><span class="n">3</span>Work the queue · 3 decisions waiting</span>
+      <span class="step"><span class="n">4</span>Record findings and export</span>
+    </div>
+    <div style="display: grid; grid-template-columns: 360px minmax(0, 1fr) 380px; flex: 1; min-height: 0;">
+      <!-- Queue -->
+      <div style="display: flex; flex-direction: column; gap: 8px; padding: 14px; border-right: 1px solid #5f82a0; background: rgba(9,23,37,.6);">
+        <span class="tag">Relationships pending · 2</span>
+        <div class="queue-item is-on"><span style="font: 600 12px var(--mono);">northwind-logistics.example → Baltic Freight OU</span><span style="color: var(--muted); font-size: 11px;">associated with · proposed by agent · 1 citation</span></div>
+        <div class="queue-item"><span style="font: 600 12px var(--mono);">203.0.113.42 → AS64496 Harbourline</span><span style="color: var(--muted); font-size: 11px;">hosted on · proposed by agent · no citation</span></div>
+        <span class="tag" style="margin-top: 8px;">Collection inconclusive · 1</span>
+        <div class="queue-item"><span style="font: 600 12px var(--mono);">urlscan · northwind-logistics.example</span><span style="color: var(--muted); font-size: 11px;">rate limit (429) · retry</span></div>
+        <span class="tag" style="margin-top: 8px;">Untriaged leads · 3 of 6</span>
+        <div class="queue-item"><span class="line" style="width: 70%;"></span><span class="line" style="width: 40%;"></span></div>
+        <div class="queue-item"><span class="line" style="width: 60%;"></span><span class="line" style="width: 40%;"></span></div>
+        <div class="queue-item"><span class="line" style="width: 75%;"></span><span class="line" style="width: 35%;"></span></div>
+      </div>
+      <!-- Selected decision -->
+      <div style="display: flex; flex-direction: column; gap: 14px; padding: 22px 26px; min-width: 0;">
+        <span class="tag">Decision 1 of 3</span>
+        <h1 style="margin: 0; font-size: 22px; letter-spacing: -.035em;">Does northwind-logistics.example relate to Baltic Freight OU?</h1>
+        <div class="wire-solid" style="padding: 16px; display: grid; gap: 12px; border-left: 3px solid #efbd58;">
+          <div style="display: flex; align-items: center; gap: 10px; font: 600 13px var(--mono);"><span>northwind-logistics.example</span><span style="color: var(--muted);">→</span><span>Baltic Freight OU</span></div>
+          <span class="pill" style="width: fit-content;">associated with · pending analyst review</span>
+          <span class="tag">Rationale from the agent</span>
+          <p style="margin: 0; color: var(--text-soft);">The About page names Baltic Freight OU as a partner and links to baltic-freight.example; no registration or hosting record connects the two.</p>
+          <span class="tag">Citation</span>
+          <div class="wire" style="padding: 10px; font: 11px var(--mono); color: var(--text-soft);">extract · northwind-logistics.example/about · Retrieved Sep 3, 06:36</div>
+          <div style="display: flex; gap: 8px; justify-content: flex-end;"><span class="btn">Skip for now</span><span class="btn danger">Reject from case</span><span class="btn primary">Accept into case</span></div>
+        </div>
+        <span style="color: var(--muted); font-size: 11px;">Accepting records a case decision. It is not a claim of attribution.</span>
+      </div>
+      <!-- Context -->
+      <div style="display: flex; flex-direction: column; gap: 12px; padding: 14px; border-left: 1px solid #5f82a0; background: rgba(9,23,37,.6);">
+        <span class="tag">Where this sits in the graph</span>
+        <div class="wire-solid" style="position: relative; height: 300px; overflow: hidden; background-image: radial-gradient(rgba(91,122,151,.34) .75px, transparent .75px); background-size: 24px 24px;">
+          <svg viewBox="0 0 350 300" style="width: 100%; height: 100%;" aria-label="Graph preview">
+            <line x1="175" y1="150" x2="250" y2="200" stroke="#78a9d4" stroke-width="1.7"/><line x1="175" y1="150" x2="110" y2="220" stroke="#78a9d4" stroke-width="1.7"/><line x1="175" y1="150" x2="230" y2="80" stroke="#78a9d4" stroke-width="1.7"/><line x1="175" y1="150" x2="90" y2="90" stroke="#e6b85c" stroke-width="2.4" stroke-dasharray="6 5"/>
+            <circle cx="175" cy="150" r="13" fill="#6ea8fe"/><circle cx="250" cy="200" r="9" fill="#f2bd4a"/><circle cx="110" cy="220" r="9" fill="#6ea8fe"/><circle cx="230" cy="80" r="9" fill="#59d48b"/><circle cx="90" cy="90" r="11" fill="#bd91ff"/><circle cx="90" cy="90" r="18" fill="none" stroke="#efbd58" stroke-width="2" stroke-dasharray="4 2"/>
+          </svg>
+          <span class="btn" style="position: absolute; right: 10px; bottom: 10px;">Open full graph</span>
+        </div>
+        <span class="tag">Investigation definition</span>
+        <div class="wire-solid" style="padding: 12px; display: grid; gap: 8px; font-size: 12px; color: var(--text-soft);">
+          <span><strong style="color: var(--text);">Objective</strong> Establish who operates the northwind-logistics.example infrastructure and whether Baltic Freight OU is a real partner.</span>
+          <span><strong style="color: var(--text);">Scope</strong> Public DNS, registration, certificate, URL-scan and archive sources. No person-level enrichment.</span>
+        </div>
+        <span class="tag">Empty case becomes this same screen with steps 1 and 2 open</span>
+      </div>
+    </div>
+  </div>
+  <footer style="grid-column: 1 / -1; grid-row: 3; display: flex; align-items: center; padding: 0 12px; border-top: 1px solid rgba(65,98,127,.58); background: rgba(7,17,29,.94); color: var(--muted); font: 10px var(--mono);">● 13 collection tools available · WebMCP connected (unchanged)</footer>
+</div>
+</x-dc>
+</body>
+</html>

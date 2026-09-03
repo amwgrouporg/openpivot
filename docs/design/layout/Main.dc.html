@@ -1,0 +1,312 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+  <style>
+    :root{--ink-0:#07111d;--ink-1:#0b1826;--ink-2:#112235;--ink-3:#192d42;--ink-4:#213950;--line:#5f82a0;--line-bright:#7395b2;--text:#edf3f9;--text-soft:#bdcad7;--muted:#899bad;--faint:#5f7387;--blue:#70b5ff;--blue-wash:rgba(72,151,246,.13);--green:#5bd69a;--green-wash:rgba(56,190,126,.12);--amber:#efbd58;--amber-wash:rgba(239,189,88,.11);--red:#ff766e;--red-wash:rgba(255,100,94,.11);--violet:#c19aff;--glass-line:rgba(170,200,232,.16);--glass-edge:inset 0 1px 0 rgba(255,255,255,.09);--sans:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+    body{margin:0;background:#07111d;color:#edf3f9;font:13px/1.5 var(--sans)}
+    *{box-sizing:border-box}
+    a{color:#9ac7ff}a:hover{color:#b8d8ff}
+    .glass{background:color-mix(in srgb, var(--tint) 62%, transparent);border:1px solid var(--glass-line);box-shadow:var(--glass-edge),0 18px 46px rgba(0,0,0,.28);backdrop-filter:blur(var(--blur)) saturate(140%);-webkit-backdrop-filter:blur(var(--blur)) saturate(140%)}
+    .glass-flat{background:color-mix(in srgb, var(--tint) 58%, transparent);backdrop-filter:blur(var(--blur)) saturate(140%);-webkit-backdrop-filter:blur(var(--blur)) saturate(140%);box-shadow:var(--glass-edge)}
+    .glass-soft{background:rgba(255,255,255,.045);border:1px solid rgba(170,200,232,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+    .eyebrow{color:var(--muted);font:600 10px/1.2 var(--sans);letter-spacing:.12em;text-transform:uppercase}
+    .mono{font-family:var(--mono)}
+    .icon{width:17px;height:17px;flex:0 0 auto}
+    .button{min-height:34px;display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid rgba(170,200,232,.14);border-radius:8px;padding:6px 11px;background:rgba(255,255,255,.055);color:var(--text);font-weight:600;line-height:1.15;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);white-space:nowrap}
+    .button--primary{border-color:rgba(160,208,255,.7);background:linear-gradient(180deg,rgba(69,151,255,.92),rgba(53,139,248,.92));color:#07111d;box-shadow:inset 0 1px 0 rgba(255,255,255,.38),0 8px 24px rgba(26,105,205,.28)}
+    .button--ghost{background:rgba(255,255,255,.035)}
+    .button--quiet{border-color:transparent;background:transparent;color:var(--muted);box-shadow:none}
+    .button--small{min-height:29px;padding:4px 8px;border-radius:7px;font-size:11px}
+    .icon-button{width:34px;height:34px;padding:0}
+    .badge{display:inline-flex;align-items:center;gap:5px;width:fit-content;border:1px solid rgba(170,200,232,.16);border-radius:999px;padding:3px 7px;background:rgba(255,255,255,.03);color:var(--text-soft);font:600 9px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+    .badge .icon{width:11px;height:11px}
+    .badge--ok{border-color:rgba(91,214,154,.3);background:var(--green-wash);color:#8ce8b9}
+    .badge--indeterminate{border-color:rgba(239,189,88,.3);background:var(--amber-wash);color:#f2ce83}
+    .badge--human{border-color:rgba(105,169,255,.3);color:#a9d0ff}
+    .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+    .type-mark{width:6px;height:6px;border-radius:2px}
+    .selector{color:var(--text);font:600 12px/1.4 var(--mono);overflow-wrap:anywhere}
+    .input{min-height:36px;border:1px solid rgba(170,200,232,.14);border-radius:8px;padding:8px 10px;background:rgba(4,13,23,.42);color:var(--text);display:flex;align-items:center;gap:8px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+    .seg{display:inline-flex;border:1px solid var(--glass-line);border-radius:8px;overflow:hidden;background:color-mix(in srgb, var(--tint) 55%, transparent);backdrop-filter:blur(var(--blur)) saturate(140%);-webkit-backdrop-filter:blur(var(--blur)) saturate(140%);box-shadow:var(--glass-edge)}
+    .seg > span{min-height:29px;display:inline-flex;align-items:center;padding:6px 10px;color:var(--muted);font-size:11px;font-weight:600;border-right:1px solid rgba(170,200,232,.12);white-space:nowrap}
+    .seg > span:last-child{border-right:0}
+    .seg > span.is-on{background:rgba(112,181,255,.16);color:#afd6ff}
+    .chip{min-height:26px;display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(170,200,232,.14);border-radius:999px;padding:2px 8px;background:rgba(255,255,255,.03);color:var(--muted);font-size:10px;white-space:nowrap}
+    .chip.is-active{border-color:rgba(112,181,255,.45);background:rgba(112,181,255,.14);color:var(--text)}
+    .nav-item{position:relative;min-height:39px;display:flex;align-items:center;gap:11px;padding:8px 10px;border:1px solid transparent;border-radius:8px;color:var(--muted)}
+    .nav-item.is-active{border-color:rgba(170,200,232,.14);background:rgba(255,255,255,.055);color:#afd6ff;box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
+    .nav-item.is-active::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:2px;border-radius:2px;background:var(--blue)}
+    .nav-count{margin-left:auto;min-width:20px;height:18px;display:grid;place-items:center;border:1px solid rgba(170,200,232,.16);border-radius:999px;color:var(--text-soft);font:10px var(--mono)}
+    .entity-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:7px 9px;border:1px solid transparent;border-radius:8px;color:var(--text)}
+    .entity-row.is-selected{border-color:rgba(112,181,255,.32);background:rgba(112,181,255,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+    .result-row{display:grid;grid-template-columns:64px auto minmax(0,1fr) auto;align-items:center;gap:9px;padding:8px 10px;border-radius:8px}
+    .result-row p{margin:0;color:var(--text-soft);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .section-title{display:flex;align-items:center;gap:8px;margin:0;color:var(--text-soft);font-size:12px;letter-spacing:.02em}
+    .count-pill{min-width:21px;height:19px;display:grid;place-items:center;border:1px solid rgba(170,200,232,.16);border-radius:999px;color:var(--muted);font:10px var(--mono)}
+    .graph-text{fill:#dce9f5;font:9.5px "SFMono-Regular",Consolas,"Liberation Mono",monospace}
+    .edge-text{fill:#aebfd0;font:8.5px "SFMono-Regular",Consolas,"Liberation Mono",monospace;paint-order:stroke;stroke:rgba(7,17,28,.94);stroke-width:4px;stroke-linejoin:round}
+    .blob{position:absolute;z-index:0;border-radius:50%;pointer-events:none;filter:blur(46px)}
+  </style>
+</helmet>
+
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; display: grid; grid-template-columns: 216px minmax(0, 1fr); grid-template-rows: 64px minmax(0, 1fr) 30px; --tint: {{tint}}; --blur: {{blur}}px; background-color: #07111d; background-image: radial-gradient(circle at 22% -5%, rgba(58,143,235,.18), transparent 38%), radial-gradient(circle at 92% 18%, rgba(133,94,205,.1), transparent 30%), linear-gradient(rgba(116,153,184,.032) 1px, transparent 1px), linear-gradient(90deg, rgba(116,153,184,.032) 1px, transparent 1px), linear-gradient(155deg, #08131f 0%, #07111d 52%, #091521 100%); background-size: auto, auto, 24px 24px, 24px 24px, auto;">
+
+  <!-- Colour fields behind the glass, so the frost has something to refract -->
+  <div class="blob" style="left: 140px; top: 120px; width: 520px; height: 420px; background: radial-gradient(circle, rgba(58,143,235,.34), transparent 62%);"></div>
+  <div class="blob" style="left: 880px; top: 480px; width: 560px; height: 480px; background: radial-gradient(circle, rgba(133,94,205,.3), transparent 62%);"></div>
+  <div class="blob" style="left: 520px; top: -160px; width: 420px; height: 360px; background: radial-gradient(circle, rgba(91,214,154,.14), transparent 62%);"></div>
+
+  <!-- Top bar -->
+  <header class="glass-flat" style="position: relative; z-index: 2; grid-column: 1 / -1; display: grid; grid-template-columns: 216px minmax(180px, 1fr) minmax(220px, 360px) auto auto auto; align-items: center; min-width: 0; border-bottom: 1px solid var(--glass-line);">
+    <div style="height: 100%; display: flex; align-items: center; gap: 11px; padding: 0 20px; border-right: 1px solid var(--glass-line);">
+      <span style="display: grid; place-items: center; width: 31px; height: 31px; border: 1px solid rgba(170,200,232,.3); border-radius: 9px; background: rgba(255,255,255,.07); color: #70b5ff; font: 700 10px/1 var(--mono); letter-spacing: .04em; box-shadow: inset 0 1px 0 rgba(255,255,255,.14);">OP</span>
+      <span style="font-weight: 700; letter-spacing: -.02em;">OpenPivot</span>
+    </div>
+    <div style="display: grid; gap: 2px; min-width: 0; padding: 0 18px;">
+      <span class="eyebrow">Cyber investigation</span>
+      <span style="font-size: 15px; font-weight: 650; letter-spacing: -.01em;">Northwind freight infrastructure</span>
+    </div>
+    <div class="input" style="min-height: 34px; margin-right: 10px; padding: 0 8px 0 10px; border-radius: 9px; color: var(--muted);">
+      <svg class="icon" style="width: 14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+      <span style="flex: 1; font-size: 12px;">Search entities, collection, evidence, findings</span>
+      <kbd style="min-width: 24px; padding: 3px 5px; border: 1px solid rgba(170,200,232,.2); border-radius: 5px; background: rgba(255,255,255,.05); font: 9px/1 var(--mono); text-align: center;">⌘K</kbd>
+    </div>
+    <div style="display: flex; align-items: center; gap: 16px; padding: 0 18px; color: var(--muted); font-size: 11px; white-space: nowrap;">
+      <span><strong class="mono" style="color: var(--text-soft);">6</strong> entities</span>
+      <span><strong class="mono" style="color: var(--text-soft);">4</strong> relationships in case</span>
+      <span style="color: var(--amber);"><strong class="mono">2</strong> pending review</span>
+    </div>
+    <span class="button button--ghost" style="margin-right: 9px;"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg><span>Export</span></span>
+    <span class="button button--quiet" style="margin-right: 9px;">New case</span>
+  </header>
+
+  <!-- Side rail -->
+  <aside class="glass-flat" style="position: relative; z-index: 2; grid-column: 1; grid-row: 2; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--glass-line);">
+    <div class="glass-soft" style="display: grid; gap: 5px; margin: 17px 14px 12px; padding: 14px; border-radius: 10px;">
+      <span class="eyebrow">Investigation pulse</span>
+      <strong style="font-size: 12px;">2 relationships pending</strong>
+      <span style="color: var(--muted); font: 10.5px var(--mono);">7 collection results · 1 evidence entry</span>
+    </div>
+    <nav style="display: grid; gap: 4px; padding: 4px 10px;">
+      <span class="nav-item"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6v6H4zM14 4h6v4h-6zM14 12h6v8h-6zM4 14h6v6H4z"/></svg><span>Case overview</span><span class="nav-count">3</span></span>
+      <span class="nav-item is-active"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3"/><circle cx="17" cy="7" r="3"/><circle cx="17" cy="17" r="3"/><path d="m9.7 10.7 4.5-2.4M9.7 13.3l4.5 2.4"/></svg><span>Entities</span><span class="nav-count">6</span></span>
+      <span class="nav-item"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12h8M5 8a4 4 0 1 0 0 8M19 8a4 4 0 1 1 0 8"/></svg><span>Relationships</span><span class="nav-count">2</span></span>
+      <span class="nav-item"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5"/></svg><span>Evidence</span><span class="nav-count">1</span></span>
+      <span class="nav-item"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"/></svg><span>Findings</span></span>
+    </nav>
+    <div style="flex: 1;"></div>
+    <div style="display: flex; justify-content: space-between; margin: 10px; padding: 10px; border-top: 1px solid var(--glass-line); color: var(--muted); font-size: 11px;"><span>Audit trail</span><span>19</span></div>
+  </aside>
+
+  <!-- Workspace -->
+  <div style="position: relative; z-index: 1; grid-column: 2; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) 430px; min-width: 0; min-height: 0;">
+
+    <!-- Canvas column -->
+    <div style="display: flex; flex-direction: column; min-width: 0; min-height: 0;">
+
+      <!-- Command bar replaces the page header and both add-entity forms -->
+      <div class="glass-flat" style="display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-bottom: 1px solid var(--glass-line);">
+        <div class="input" style="min-width: 118px; justify-content: space-between;"><span>domain</span><svg class="icon" style="width: 12px; color: var(--muted);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+        <div class="input" style="flex: 1; color: var(--muted);"><span class="mono">Add a selector to the case…</span></div>
+        <span class="button button--primary"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span>Add</span></span>
+        <span style="width: 1px; height: 24px; margin: 0 4px; background: var(--glass-line);"></span>
+        <span class="button button--ghost" style="border-color: rgba(239,189,88,.36); color: #f2ce83;"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.8 20h18.4zM12 9v5M12 17v.1"/></svg><span>2 relationships to review</span></span>
+      </div>
+
+      <!-- The canvas fills whatever is left -->
+      <div style="position: relative; flex: 1; min-height: 0; overflow: hidden; background-image: radial-gradient(rgba(91,122,151,.34) .75px, transparent .75px); background-size: 24px 24px;">
+
+        <!-- Graph, drawn statically in the app's own encoding; it sits under the glass panels -->
+        <svg viewBox="0 0 794 751" preserveAspectRatio="xMidYMid meet" style="position: absolute; inset: 0; width: 100%; height: 100%; display: block;" aria-label="Investigation graph">
+          <defs>
+            <marker id="arrow-accepted" viewBox="0 -4 8 8" refX="25" refY="0" markerWidth="8" markerHeight="8" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,-4L8,0L0,4Z" fill="#78a9d4"/></marker>
+          </defs>
+          <path d="M530,380 Q612,438 690,486" fill="none" stroke="#78a9d4" stroke-width="1.7" marker-end="url(#arrow-accepted)"/>
+          <text class="edge-text" x="640" y="452" text-anchor="middle">resolves to · 1 source</text>
+          <path d="M530,380 Q470,470 420,560" fill="none" stroke="#78a9d4" stroke-width="1.7" marker-end="url(#arrow-accepted)"/>
+          <text class="edge-text" x="462" y="474" text-anchor="middle">uses nameserver</text>
+          <path d="M530,380 Q500,520 500,650" fill="none" stroke="#78a9d4" stroke-width="1.7" marker-end="url(#arrow-accepted)"/>
+          <text class="edge-text" x="548" y="530" text-anchor="start">uses nameserver</text>
+          <path d="M640,210 Q590,290 530,380" fill="none" stroke="#78a9d4" stroke-width="1.7" marker-end="url(#arrow-accepted)"/>
+          <text class="edge-text" x="600" y="288" text-anchor="middle">references</text>
+          <path d="M530,380 Q455,300 380,250" fill="none" stroke="#e6b85c" stroke-width="1.7" stroke-dasharray="6 5"/>
+          <text class="edge-text" x="470" y="296" text-anchor="middle">associated with · pending</text>
+          <path d="M690,486 Q712,530 712,575" fill="none" stroke="#e6b85c" stroke-width="1.7" stroke-dasharray="6 5"/>
+          <text class="edge-text" x="694" y="536" text-anchor="end">hosted on · pending</text>
+
+          <g transform="translate(530,380)">
+            <circle r="23" fill="none" stroke="#8fc0ff" stroke-width="2.5"/>
+            <circle r="19" fill="none" stroke="#6ea8fe" stroke-width="2"/>
+            <circle r="15" fill="none" stroke="#7f9bb7" stroke-width="1.3"/>
+            <circle r="11" fill="#6ea8fe" stroke="rgba(3,10,17,.9)" stroke-width="1.5"/>
+            <path transform="translate(-6,-6) scale(.5)" d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18M5 7h14M5 17h14" fill="none" stroke="#06111d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="-88" y="25" width="176" height="18" rx="4" fill="rgba(7,17,28,.9)" stroke="rgba(104,133,161,.42)" stroke-width=".8"/>
+            <text class="graph-text" y="38" text-anchor="middle">northwind-logistics.example</text>
+            <g transform="translate(16,-16)"><circle r="7" fill="#11263a" stroke="#8aa4bd" stroke-width="1"/><text dy=".33em" text-anchor="middle" style="fill: #d7e3ef; font: 7.5px var(--mono);">1</text></g>
+          </g>
+          <g transform="translate(690,486)">
+            <circle r="19" fill="none" stroke="#6ea8fe" stroke-width="2"/>
+            <circle r="15" fill="none" stroke="#c19aff" stroke-width="1.3" stroke-dasharray="3 2"/>
+            <circle r="11" fill="#f2bd4a" stroke="rgba(3,10,17,.9)" stroke-width="1.5"/>
+            <path transform="translate(-6,-6) scale(.5)" d="M4 7h16v10H4zM8 12h.1M12 12h.1M16 12h.1" fill="none" stroke="#06111d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="-56" y="25" width="112" height="18" rx="4" fill="rgba(7,17,28,.9)" stroke="rgba(104,133,161,.42)" stroke-width=".8"/>
+            <text class="graph-text" y="38" text-anchor="middle">203.0.113.42</text>
+          </g>
+          <g transform="translate(420,560)">
+            <circle r="19" fill="none" stroke="#60758c" stroke-width="2"/>
+            <circle r="15" fill="none" stroke="#c19aff" stroke-width="1.3" stroke-dasharray="3 2"/>
+            <circle r="11" fill="#6ea8fe" stroke="rgba(3,10,17,.9)" stroke-width="1.5"/>
+            <path transform="translate(-6,-6) scale(.5)" d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18M5 7h14M5 17h14" fill="none" stroke="#06111d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="-72" y="25" width="144" height="18" rx="4" fill="rgba(7,17,28,.9)" stroke="rgba(104,133,161,.42)" stroke-width=".8"/>
+            <text class="graph-text" y="38" text-anchor="middle">ns1.baltic-dns.example</text>
+          </g>
+          <g transform="translate(500,650)">
+            <circle r="19" fill="none" stroke="#60758c" stroke-width="2"/>
+            <circle r="15" fill="none" stroke="#c19aff" stroke-width="1.3" stroke-dasharray="3 2"/>
+            <circle r="11" fill="#6ea8fe" stroke="rgba(3,10,17,.9)" stroke-width="1.5"/>
+            <path transform="translate(-6,-6) scale(.5)" d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18M5 7h14M5 17h14" fill="none" stroke="#06111d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="-72" y="25" width="144" height="18" rx="4" fill="rgba(7,17,28,.9)" stroke="rgba(104,133,161,.42)" stroke-width=".8"/>
+            <text class="graph-text" y="38" text-anchor="middle">ns2.baltic-dns.example</text>
+          </g>
+          <g transform="translate(640,210)">
+            <circle r="19" fill="none" stroke="#6ea8fe" stroke-width="2"/>
+            <circle r="15" fill="none" stroke="#c19aff" stroke-width="1.3" stroke-dasharray="3 2"/>
+            <circle r="11" fill="#59d48b" stroke="rgba(3,10,17,.9)" stroke-width="1.5"/>
+            <path transform="translate(-6,-6) scale(.5)" d="M9 15l6-6M7.5 17.5l-1 1a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0M16.5 6.5l1-1a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0" fill="none" stroke="#06111d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="-92" y="25" width="184" height="18" rx="4" fill="rgba(7,17,28,.9)" stroke="rgba(104,133,161,.42)" stroke-width=".8"/>
+            <text class="graph-text" y="38" text-anchor="middle">northwind-logistics.example/about</text>
+          </g>
+          <g transform="translate(380,250)">
+            <circle r="19" fill="none" stroke="#60758c" stroke-width="2"/>
+            <circle r="15" fill="none" stroke="#7f9bb7" stroke-width="1.3"/>
+            <circle r="11" fill="#bd91ff" stroke="rgba(3,10,17,.9)" stroke-width="1.5"/>
+            <path transform="translate(-6,-6) scale(.5)" d="M4 20h16M6 20V9h12v11M9 12h2M13 12h2M9 16h2M13 16h2M8 9V5h8v4" fill="none" stroke="#06111d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="-58" y="25" width="116" height="18" rx="4" fill="rgba(7,17,28,.9)" stroke="rgba(104,133,161,.42)" stroke-width=".8"/>
+            <text class="graph-text" y="38" text-anchor="middle">Baltic Freight OU</text>
+          </g>
+          <g transform="translate(712,575)" opacity=".55">
+            <circle r="11" fill="none" stroke="#bd91ff" stroke-width="1.5" stroke-dasharray="3 2"/>
+            <rect x="-76" y="25" width="152" height="18" rx="4" fill="rgba(7,17,28,.9)" stroke="rgba(104,133,161,.42)" stroke-width=".8"/>
+            <text class="graph-text" y="38" text-anchor="middle">AS64496 Harbourline · lead</text>
+          </g>
+        </svg>
+
+        <!-- One floating toolbar carries every graph control -->
+        <div style="position: absolute; left: 12px; right: 12px; top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="seg"><span class="is-on">Map</span><span>Lanes</span><span>Radial</span></span>
+            <span class="seg"><span class="is-on">All</span><span>1 hop</span><span>2 hops</span></span>
+            <span class="seg"><span>Filters ▾</span></span>
+          </div>
+          <div class="glass" style="display: flex; align-items: center; gap: 4px; padding: 3px; border-radius: 9px;">
+            <span class="button button--small button--quiet">Trace path</span>
+            <span class="button button--small button--quiet">Fit</span>
+            <span class="button button--small button--quiet">Reset</span>
+            <span class="button button--small button--quiet" style="width: 29px; padding: 0;">−</span>
+            <span class="button button--small button--quiet" style="width: 29px; padding: 0;">+</span>
+            <span class="button button--small button--quiet">Legend</span>
+          </div>
+        </div>
+
+        <!-- Case panel floats on the canvas and collapses -->
+        <div class="glass" style="position: absolute; left: 12px; top: 58px; width: 262px; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <h2 class="section-title">Case entities <span class="count-pill">6</span></h2>
+            <span class="button button--quiet icon-button" style="width: 26px; height: 26px;"><svg class="icon" style="width: 13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg></span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+            <span class="chip is-active"><span class="type-mark" style="background: #6ea8fe;"></span>domain 3</span>
+            <span class="chip is-active"><span class="type-mark" style="background: #f2bd4a;"></span>ip 1</span>
+            <span class="chip is-active"><span class="type-mark" style="background: #59d48b;"></span>url 1</span>
+            <span class="chip is-active"><span class="type-mark" style="background: #bd91ff;"></span>org 1</span>
+            <span class="chip"><span class="type-mark" style="background: #9aa7b7;"></span>document</span>
+            <span class="chip"><span class="type-mark" style="background: #ff7b72;"></span>claim</span>
+          </div>
+          <div style="display: grid; gap: 3px;">
+            <div class="entity-row is-selected"><span class="type-mark" style="background: #6ea8fe;"></span><span class="selector">northwind-logistics.example</span><span class="dot" style="color: #a9d0ff;"></span></div>
+            <div class="entity-row"><span class="type-mark" style="background: #f2bd4a;"></span><span class="selector">203.0.113.42</span><span class="dot" style="color: #d2b9ff;"></span></div>
+            <div class="entity-row"><span class="type-mark" style="background: #6ea8fe;"></span><span class="selector">ns1.baltic-dns.example</span><span class="dot" style="color: #d2b9ff;"></span></div>
+            <div class="entity-row"><span class="type-mark" style="background: #6ea8fe;"></span><span class="selector">ns2.baltic-dns.example</span><span class="dot" style="color: #d2b9ff;"></span></div>
+            <div class="entity-row"><span class="type-mark" style="background: #59d48b;"></span><span class="selector">https://northwind-logistics.example/about</span><span class="dot" style="color: #d2b9ff;"></span></div>
+            <div class="entity-row"><span class="type-mark" style="background: #bd91ff;"></span><span class="selector">Baltic Freight OU</span><span class="dot" style="color: #a9d0ff;"></span></div>
+          </div>
+          <span style="color: var(--muted); font-size: 10px;">2 dismissed leads · <a href="#restore">show</a></span>
+        </div>
+
+        <!-- Hover status and minimap keep their corners -->
+        <p class="glass" style="position: absolute; left: 12px; bottom: 12px; max-width: min(58ch, calc(100% - 230px)); margin: 0; padding: 7px 9px; border-radius: 7px; color: var(--muted); font: 9px/1.4 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">domain: northwind-logistics.example; added by investigator; Retrieved; 1 evidence entry; 5 relationships</p>
+        <div class="glass" style="position: absolute; right: 12px; bottom: 12px; width: 190px; height: 116px; border-radius: 8px; overflow: hidden;">
+          <svg viewBox="0 0 190 116" style="width: 100%; height: 100%; display: block;"><line x1="98" y1="52" x2="132" y2="70" stroke="#50677e" stroke-width=".7"/><line x1="98" y1="52" x2="76" y2="84" stroke="#50677e" stroke-width=".7"/><line x1="98" y1="52" x2="90" y2="102" stroke="#50677e" stroke-width=".7"/><line x1="98" y1="52" x2="122" y2="26" stroke="#50677e" stroke-width=".7"/><line x1="98" y1="52" x2="60" y2="30" stroke="#50677e" stroke-width=".7"/><circle cx="98" cy="52" r="2.25" fill="#6ea8fe"/><circle cx="132" cy="70" r="2.25" fill="#f2bd4a"/><circle cx="76" cy="84" r="2.25" fill="#6ea8fe"/><circle cx="90" cy="102" r="2.25" fill="#6ea8fe"/><circle cx="122" cy="26" r="2.25" fill="#59d48b"/><circle cx="60" cy="30" r="2.25" fill="#bd91ff"/><rect x="40" y="14" width="120" height="96" fill="rgba(105,169,255,.08)" stroke="#8fc0ff" stroke-width="1"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inspector: a glass sheet -->
+    <aside class="glass-flat" style="display: flex; flex-direction: column; gap: 14px; min-width: 0; min-height: 0; padding: 18px 20px; overflow: hidden; border-left: 1px solid var(--glass-line); box-shadow: inset 1px 0 0 rgba(255,255,255,.05), -18px 0 54px rgba(0,0,0,.28);">
+      <div style="display: flex; justify-content: space-between; gap: 12px;">
+        <div style="display: grid; gap: 4px; min-width: 0;">
+          <span class="eyebrow">Selected entity</span>
+          <h2 style="margin: 0; font-size: 18px; line-height: 1.25; letter-spacing: -.025em; overflow-wrap: anywhere;">northwind-logistics.example</h2>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); font-size: 11px;">
+            <span class="badge"><span class="type-mark" style="background: #6ea8fe;"></span>domain</span>
+            <span class="badge badge--human"><span class="dot"></span>investigator</span>
+            <span>Sep 3, 06:35 AM</span>
+          </div>
+        </div>
+        <span class="button button--quiet icon-button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 6 12 12M18 6 6 18"/></svg></span>
+      </div>
+
+      <div style="display: flex; gap: 7px;">
+        <span class="button button--primary" style="flex: 1;"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><span>Run domain pivot again</span></span>
+        <span class="button button--ghost">Notes</span>
+        <span class="button button--ghost">Evidence</span>
+      </div>
+
+      <div style="display: grid; gap: 8px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;"><h2 class="section-title">Collection results <span class="count-pill">5</span></h2><span style="color: var(--muted); font-size: 10px;">Sep 3, 06:36 AM</span></div>
+        <div class="result-row glass-soft"><span class="selector">dns</span><span class="badge badge--ok"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg><span>Retrieved</span></span><p>A 203.0.113.42 | NS ns1, ns2.baltic-dns.example | TXT x2</p><a href="#dns" style="font: 10.5px var(--mono);">Source</a></div>
+        <div class="result-row glass-soft"><span class="selector">rdap</span><span class="badge badge--ok"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg><span>Retrieved</span></span><p>registrar Northgate; registration 2019-04-11; NS ns1, ns2.baltic-dns.example</p><a href="#rdap" style="font: 10.5px var(--mono);">Source</a></div>
+        <div class="result-row glass-soft"><span class="selector">certs</span><span class="badge badge--ok"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg><span>Retrieved</span></span><p>14 certs, 6 names, first 2019-05-02, last 2026-08-19</p><a href="#certs" style="font: 10.5px var(--mono);">Source</a></div>
+        <div class="result-row glass-soft"><span class="selector">wayback</span><span class="badge badge--ok"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg><span>Retrieved</span></span><p>31 months with captures, 20190602 to 20260827</p><a href="#wayback" style="font: 10.5px var(--mono);">Source</a></div>
+        <div class="result-row glass-soft" style="border-color: rgba(239,189,88,.3);"><span class="selector">urlscan</span><span class="badge badge--indeterminate"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.8 20h18.4zM12 9v5M12 17v.1"/></svg><span>Inconclusive</span></span><p>urlscan rate limit (429); retry after 60 s</p><a href="#urlscan" style="font: 10.5px var(--mono);">Retry</a></div>
+      </div>
+
+      <div style="display: grid; gap: 8px;">
+        <h2 class="section-title">Investigative leads <span class="count-pill">2</span></h2>
+        <div class="glass-soft" style="padding: 10px 12px; border-radius: 10px; display: grid; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 8px;"><span class="badge"><span class="type-mark" style="background: #6ea8fe;"></span>domain</span><span class="selector">mail.northwind-logistics.example</span></div>
+          <span style="color: var(--text-soft); font-size: 11px;">name on a certificate</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;"><span class="button button--small">Add entity</span><span class="button button--small button--primary">Add and queue relationship</span><span class="button button--small button--quiet">Dismiss</span></div>
+        </div>
+        <div class="glass-soft" style="padding: 10px 12px; border-radius: 10px; display: grid; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 8px;"><span class="badge"><span class="type-mark" style="background: #bd91ff;"></span>org</span><span class="selector">Northgate Registrar Ltd</span></div>
+          <span style="color: var(--text-soft); font-size: 11px;">registrar</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;"><span class="button button--small">Add entity</span><span class="button button--small button--primary">Add and queue relationship</span><span class="button button--small button--quiet">Dismiss</span></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Status bar -->
+  <footer class="glass-flat" style="position: relative; z-index: 2; grid-column: 1 / -1; grid-row: 3; display: flex; align-items: center; justify-content: space-between; gap: 20px; min-width: 0; padding: 0 12px; border-top: 1px solid var(--glass-line); color: var(--muted); font: 10px var(--mono);">
+    <div style="display: flex; align-items: center; gap: 7px; white-space: nowrap;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #5bd69a; box-shadow: 0 0 0 3px rgba(56,190,126,.12);"></span><strong style="color: var(--text-soft); font-weight: 500;">13 collection tools available</strong><span>WebMCP connected</span></div>
+    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">read_case · add_entity · link_entities · attach_evidence · search_web · lookup_wikidata · extract_page · build_queries · write_memo · export_case · pivot_domain · pivot_ip · pivot_url</span>
+  </footer>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"blur":{"editor":"range","default":18,"min":0,"max":30,"step":2,"unit":"px","section":"Glass"},"tint":{"editor":"color","default":"#12253a","options":["#12253a","#1a1f3d","#0f2a2e","#241a33"],"section":"Glass"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { blur: this.props.blur ?? 18, tint: this.props.tint ?? '#12253a' };
+  }
+}
+</script>
+</body>
+</html>

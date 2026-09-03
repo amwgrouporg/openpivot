@@ -1,0 +1,19 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "Layout" },
+    { "id": "page-2", "name": "Directions" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1440, "h": 900, "title": "Main · Direction A, glass", "page": "page-1" },
+    { "file": "CanvasFirst.dc.html", "x": 0, "y": 200, "w": 1440, "h": 900, "title": "A · Canvas first (chosen)", "page": "page-2" },
+    { "file": "Desk.dc.html", "x": 1560, "y": 200, "w": 1440, "h": 900, "title": "B · Investigation desk", "page": "page-2" },
+    { "file": "GuidedQueue.dc.html", "x": 3120, "y": 200, "w": 1440, "h": 900, "title": "C · Guided queue", "page": "page-2" }
+  ],
+  "annotations": [
+    { "id": "main-note", "x": 1560, "y": 0, "w": 400, "page": "page-1", "text": "Direction A built out with a glass finish. Two levers above the board: Glass blur dials the frost, Glass tint sets the panel colour. Case data is sample data. The three direction sketches are kept on the Directions page." },
+    { "id": "note-a", "x": 0, "y": 0, "w": 440, "page": "page-2", "text": "A · Canvas first (chosen)\nThe graph takes every pixel between the rail and the inspector. All graph controls collapse into one floating toolbar; the entity list floats on the canvas and collapses; one command bar replaces the page header and both add forms.\nWhy: fixes the small-graph and scroll problems directly, with the least change to what people already know.\nTradeoff: more controls sit behind toggles, and relationship review still lives on another view." },
+    { "id": "note-b", "x": 1560, "y": 0, "w": 440, "page": "page-2", "text": "B · Investigation desk\nThree fixed panes: ledger, graph, inspector with Entity / Relationships / Evidence tabs. The whole loop (add, pivot, review, cite) happens on one screen; five views collapse to two.\nWhy: no navigation for the core loop, and the review queue is always in sight.\nTradeoff: needs a wide display, each pane is narrower, and the overview's metrics and lead triage lose their own page." },
+    { "id": "note-c", "x": 3120, "y": 0, "w": 440, "page": "page-2", "text": "C · Guided queue\nThe home screen is a task list of things needing a decision. The selected item opens in the centre with accept and reject; the graph is a preview that expands on demand; a four-step strip shows where you are.\nWhy: friendliest for a first-time user and for analysts who work by decisions rather than by graph. The empty case becomes the same screen with the first steps open.\nTradeoff: the graph is secondary, and power users click more to get to it." }
+  ],
+  "launch": { "view": "canvas", "page": "page-1" }
+}
