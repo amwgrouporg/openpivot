@@ -98,6 +98,25 @@ test("reduced-motion dragging updates coordinates, repaints, and publishes on en
   assert.deepEqual(calls, [["paint", 30, 40], ["paint", 50, 60], ["publish", 50, 60]]);
 });
 
+test("reduced-motion radial drag end repaints and publishes the fixed center", () => {
+  const node = { id: "focus", x: 40, y: 50, fx: 40, fy: 50 };
+  const calls = [];
+
+  applyNodeDrag(node, { x: 310, y: 280 }, {
+    reducedMotion: true,
+    ending: true,
+    fixedPosition: { x: 200, y: 180 },
+    paint: () => calls.push(["paint", node.x, node.y, node.fx, node.fy]),
+    publish: () => calls.push(["publish", node.x, node.y, node.fx, node.fy]),
+  });
+
+  assert.deepEqual(node, { id: "focus", x: 200, y: 180, fx: 200, fy: 180 });
+  assert.deepEqual(calls, [
+    ["paint", 200, 180, 200, 180],
+    ["publish", 200, 180, 200, 180],
+  ]);
+});
+
 test("renderer label modes respect the selected entity and graph density", () => {
   const nodes = [
     { id: "ent_1" }, { id: "ent_2" }, { id: "ent_3" },

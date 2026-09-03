@@ -62,8 +62,8 @@ export function applyNodeDrag(item, event, {
   fixedPosition = null,
   publish = () => {},
 } = {}) {
-  item.x = event.x;
-  item.y = event.y;
+  item.x = ending ? fixedPosition?.x ?? event.x : event.x;
+  item.y = ending ? fixedPosition?.y ?? event.y : event.y;
   item.fx = ending ? fixedPosition?.x ?? null : event.x;
   item.fy = ending ? fixedPosition?.y ?? null : event.y;
   if (reducedMotion) paint();
