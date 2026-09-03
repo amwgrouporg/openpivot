@@ -38,28 +38,60 @@ export function createRun(entity, actor, specs, now = () => new Date().toISOStri
   };
 }
 
-export async function runPivot({ caseData, entity, actor, specs, sensorCall, onUpdate = () => {}, now = () => new Date().toISOString() }) {
-  const run = createRun(entity, actor, specs, now);
-  onUpdate(run);
+function cloneRun(run) {
+  return JSON.parse(JSON.stringify(run));
+}
 
-  const readings = await Promise.all(specs.map(async (spec, index) => {
-    run.sensors[index].status = "running";
-    onUpdate(run);
-    const envelope = await sensorCall(spec.route, spec.params, spec.options);
-    const reading = addReading(caseData, entity.id, envelope, actor);
-    run.sensors[index].status = envelope.status;
+function canCommitToCase(caseData, entity, canCommit, signal) {
+  return !signal?.aborted
+    && canCommit()
+    && caseData.entities.some((item) => item.id === entity.id && item.type === entity.type && item.value === entity.value);
+}
+
+function commitPivotResults(caseData, entity, actor, run, envelopes) {
+  const staged = {
+    ...caseData,
+    readings: [...caseData.readings],
+    runs: [...(caseData.runs ?? [])],
+    log: [...caseData.log],
+  };
+  const retainedBatchIds = new Set();
+  const readings = envelopes.map((envelope, index) => {
+    const reading = addReading(staged, entity.id, envelope, actor, { retainReadingIds: retainedBatchIds });
+    retainedBatchIds.add(reading.id);
     run.sensors[index].reading_id = reading.id;
-    onUpdate(run);
-    return { envelope, reading };
+    return reading;
+  });
+  addCompletedRun(staged, cloneRun(run));
+  caseData.readings = staged.readings;
+  caseData.runs = staged.runs;
+  caseData.log = staged.log;
+  return readings;
+}
+
+export async function runPivot({ caseData, entity, actor, specs, sensorCall, onUpdate = () => {}, now = () => new Date().toISOString(), canCommit = () => true, signal = null }) {
+  const run = createRun(entity, actor, specs, now);
+  const current = () => canCommitToCase(caseData, entity, canCommit, signal);
+  const emit = () => { if (current()) onUpdate(run); };
+  emit();
+
+  const envelopes = await Promise.all(specs.map(async (spec, index) => {
+    run.sensors[index].status = "running";
+    emit();
+    const envelope = await sensorCall(spec.route, spec.params, spec.options);
+    run.sensors[index].status = envelope.status;
+    emit();
+    return envelope;
   }));
 
   run.completed_at = now();
-  run.status = readings.every(({ envelope }) => envelope.status === "ok") ? "ok" : "indeterminate";
-  addCompletedRun(caseData, JSON.parse(JSON.stringify(run)));
-  onUpdate(run);
+  run.status = envelopes.every((envelope) => envelope.status === "ok") ? "ok" : "indeterminate";
+  if (!current()) return { run, readings: [], candidates: [], cancelled: true };
+  const readings = commitPivotResults(caseData, entity, actor, run, envelopes);
+  emit();
 
   const seen = new Set();
-  const candidates = readings.flatMap(({ envelope, reading }) => candidatesFrom(caseData, entity, envelope)
+  const candidates = readings.flatMap((reading, index) => candidatesFrom(caseData, entity, envelopes[index])
     .map((candidate) => ({ ...candidate, source_reading_id: reading.id })))
     .filter((candidate) => {
       const key = `${candidate.type}:${candidate.value}`;
@@ -68,5 +100,5 @@ export async function runPivot({ caseData, entity, actor, specs, sensorCall, onU
       return true;
     });
 
-  return { run, readings: readings.map(({ reading }) => reading), candidates };
+  return { run, readings, candidates, cancelled: false };
 }

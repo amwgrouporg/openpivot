@@ -27,13 +27,29 @@ function countLabel(count, singular, plural) {
 }
 
 export function edgePresentation(link) {
+  const presentation = relationshipPresentation(link);
+  return {
+    directional: presentation.directional,
+    marker: `arrow-${presentation.status}`,
+    pattern: presentation.status === "accepted" ? null : presentation.status === "proposed" ? "6 5" : "2 6",
+    label: presentation.sourceCount ? `${presentation.typeLabel} · ${countLabel(presentation.sourceCount, "source", "sources")}` : presentation.typeLabel,
+  };
+}
+
+export function relationshipPresentation(link) {
   const status = ["accepted", "proposed", "rejected"].includes(link?.status) ? link.status : "proposed";
   const sourceCount = link?.citations?.length ?? 0;
   return {
+    status,
+    statusLabel: relationshipStatusLabel(status),
     directional: !SYMMETRIC_TYPES.has(link?.relationship_type),
-    marker: `arrow-${status}`,
-    pattern: status === "accepted" ? null : status === "proposed" ? "6 5" : "2 6",
-    label: `${relationshipTypeLabel(link?.relationship_type)} · ${countLabel(sourceCount, "source", "sources")}`,
+    cue: SYMMETRIC_TYPES.has(link?.relationship_type) ? "↔" : "→",
+    cueKind: SYMMETRIC_TYPES.has(link?.relationship_type) ? "symmetric" : "directional",
+    cueLabel: SYMMETRIC_TYPES.has(link?.relationship_type) ? "Symmetric relationship" : "Directional relationship",
+    typeLabel: relationshipTypeLabel(link?.relationship_type),
+    sourceCount,
+    actorLabel: link?.asserted_by === "agent" ? "agent" : "investigator",
+    contextualLabel: link?.contextual ? "Context only: relationship is outside the selected case-activity window" : null,
   };
 }
 
@@ -61,15 +77,18 @@ export function relationshipAccessibleName(link, entities = [], { inPath = false
   const fromValue = entityMap.get(fromId)?.value ?? link?.source?.value ?? fromId ?? "unknown source";
   const toValue = entityMap.get(toId)?.value ?? link?.target?.value ?? toId ?? "unknown target";
   const presentation = edgePresentation(link);
-  const relationship = presentation.directional
+  const shared = relationshipPresentation(link);
+  const relationship = shared.directional
     ? `directional relationship from ${fromValue} to ${toValue}`
     : `symmetric relationship between ${fromValue} and ${toValue}`;
   const parts = [
-    relationshipStatusLabel(link?.status),
+    shared.statusLabel,
     relationship,
     presentation.label,
     link?.rationale || "No rationale recorded",
+    `Proposed by ${shared.actorLabel}`,
   ];
+  if (shared.contextualLabel) parts.push(shared.contextualLabel);
   if (inPath) parts.push("included in traced path");
   return parts.join("; ");
 }
@@ -254,8 +273,8 @@ export function filterGraph(caseData, filters = {}) {
   }
 
   const hops = Number(filters.hops);
-  if (filters.selectedId && (hops === 1 || hops === 2)) {
-    const neighborhood = nodeIds.has(filters.selectedId) ? neighborhoodIds(links, filters.selectedId, hops) : new Set();
+  if (nodeIds.has(filters.selectedId) && (hops === 1 || hops === 2)) {
+    const neighborhood = neighborhoodIds(links, filters.selectedId, hops);
     nodes = nodes.filter((node) => neighborhood.has(node.id));
     nodeIds = new Set(nodes.map((node) => node.id));
     links = links.filter((link) => nodeIds.has(link.from) && nodeIds.has(link.to));
@@ -263,11 +282,12 @@ export function filterGraph(caseData, filters = {}) {
 
   const metadata = nodeMetadata(caseData, eligibleLinks);
   const offsets = parallelEdgeOffsets(links);
+  const reduceLabels = labelModeForCount(nodes.length, filters.labels ?? filters.graph_labels ?? "auto") !== "all";
   const density = {
     nodeCount: nodes.length,
     linkCount: links.length,
-    reduceLabels: labelModeForCount(nodes.length, "auto") !== "all",
-    message: nodes.length < 60 ? "" : `Showing ${nodes.length} entities and ${links.length} relationships; canvas labels are reduced for graph density.`,
+    reduceLabels,
+    message: reduceLabels ? `Showing ${nodes.length} entities and ${links.length} relationships; canvas labels are reduced for graph density.` : "",
   };
   return {
     nodes: nodes.map((node) => ({

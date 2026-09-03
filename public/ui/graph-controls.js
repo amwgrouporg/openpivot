@@ -20,6 +20,15 @@ export function graphPreferenceUpdate(caseData, name, value) {
   return normalized;
 }
 
+export function clearGraphFilters(caseData, graphFilters) {
+  graphFilters.status = "active";
+  graphFilters.types = [];
+  caseData.ui ??= {};
+  caseData.ui.graph_hops = "all";
+  caseData.ui.graph_activity_window = "all";
+  return '[data-control="graph-status-filter"]';
+}
+
 export function nextPathSelection(state, entityId, visibleLinks) {
   const current = state ?? {};
   if (!current.pathStartId || current.pathEndId) {
@@ -40,9 +49,13 @@ export function renderPathBreadcrumb(caseData, path) {
   const parts = [];
   for (let index = 0; index < path.nodeIds.length; index += 1) {
     const entity = entities.get(path.nodeIds[index]);
-    parts.push(`<span class="graph-path-node">${escapeHtml(entity?.value ?? path.nodeIds[index])}</span>`);
+    const entityLabel = entity?.value ?? path.nodeIds[index];
+    parts.push(`<button class="graph-path-node" type="button" data-action="path-open-entity" data-id="${escapeHtml(path.nodeIds[index])}" aria-label="Open entity ${escapeHtml(entityLabel)}">${escapeHtml(entityLabel)}</button>`);
     const link = links.get(path.linkIds?.[index]);
-    if (link) parts.push(`<span class="graph-path-link">${escapeHtml(relationshipTypeLabel(link.relationship_type))}</span>`);
+    if (link) {
+      const label = relationshipTypeLabel(link.relationship_type);
+      parts.push(`<button class="graph-path-link" type="button" data-action="path-open-relationship" data-id="${escapeHtml(link.id)}" aria-label="Open relationship ${escapeHtml(label)}">${escapeHtml(label)}</button>`);
+    }
   }
   return `<div class="graph-path-breadcrumb" aria-label="Relationship path">${parts.join("<span aria-hidden=\"true\"> → </span>")}<button class="button button--small button--ghost" type="button" data-graph-action="clear-path">Clear path</button></div>`;
 }
@@ -53,6 +66,9 @@ export function renderGraphControls(model = {}) {
   const pathMode = Boolean(model.pathMode);
   const path = model.path ?? null;
   const densityMessage = model.density?.message ?? "";
+  const effectiveHops = selectedId ? preferences.graph_hops ?? "all" : "all";
+  const effectiveLayout = preferences.graph_layout === "radial" && !selectedId ? "force" : preferences.graph_layout;
+  const desktopOpen = model.desktop !== false;
   const breadcrumb = path
     ? renderPathBreadcrumb(model.caseData, path)
     : model.pathStartId && model.pathEndId
@@ -63,14 +79,14 @@ export function renderGraphControls(model = {}) {
 
   return `<section class="graph-control-deck" aria-label="Investigation graph controls">
     <div class="graph-control-group" role="group" aria-label="Layout">
-      ${preferenceButton("graph_layout", "force", "Relationship map", preferences.graph_layout === "force")}
-      ${preferenceButton("graph_layout", "lanes", "Entity lanes", preferences.graph_layout === "lanes")}
-      ${preferenceButton("graph_layout", "radial", "Radial focus", preferences.graph_layout === "radial", !selectedId)}
+      ${preferenceButton("graph_layout", "force", "Relationship map", effectiveLayout === "force")}
+      ${preferenceButton("graph_layout", "lanes", "Entity lanes", effectiveLayout === "lanes")}
+      ${preferenceButton("graph_layout", "radial", "Radial focus", effectiveLayout === "radial", !selectedId)}
     </div>
     <div class="graph-control-group" role="group" aria-label="Hops">
-      ${preferenceButton("graph_hops", "all", "All entities", preferences.graph_hops === "all")}
-      ${preferenceButton("graph_hops", "1", "1 hop", Number(preferences.graph_hops) === 1)}
-      ${preferenceButton("graph_hops", "2", "2 hops", Number(preferences.graph_hops) === 2)}
+      ${preferenceButton("graph_hops", "all", "All entities", effectiveHops === "all")}
+      ${preferenceButton("graph_hops", "1", "1 hop", Number(effectiveHops) === 1, !selectedId)}
+      ${preferenceButton("graph_hops", "2", "2 hops", Number(effectiveHops) === 2, !selectedId)}
     </div>
     <label class="filter-control"><span>Case activity</span><select data-control="graph-activity-window"><option value="all"${preferences.graph_activity_window === "all" ? " selected" : ""}>All activity</option><option value="24h"${preferences.graph_activity_window === "24h" ? " selected" : ""}>Last 24 hours</option><option value="7d"${preferences.graph_activity_window === "7d" ? " selected" : ""}>Last 7 days</option><option value="30d"${preferences.graph_activity_window === "30d" ? " selected" : ""}>Last 30 days</option></select></label>
     <label class="filter-control"><span>Labels</span><select data-control="graph-label-mode"><option value="auto"${preferences.graph_labels === "auto" ? " selected" : ""}>Automatic</option><option value="all"${preferences.graph_labels === "all" ? " selected" : ""}>All labels</option><option value="focus"${preferences.graph_labels === "focus" ? " selected" : ""}>Focus labels</option></select></label>
@@ -85,6 +101,12 @@ export function renderGraphControls(model = {}) {
     ${breadcrumb}
     ${densityMessage ? `<p class="graph-density-notice">${escapeHtml(densityMessage)}</p>` : ""}
     <p class="sr-only" aria-live="polite">${pathMode ? (path ? "Path traced." : "Path tracing is active.") : "Graph controls updated."}</p>
-    <details class="graph-legend"><summary>Graph legend</summary><p>Solid lines are accepted relationships. Dashed lines are pending analyst review. Node color identifies entity type.</p></details>
+    <details class="graph-legend"${desktopOpen ? " open" : ""}><summary>Graph legend</summary><div class="graph-legend-grid">
+      <p><strong>Entity types</strong>Domain · IP address · URL · Organization · Document · Claim</p>
+      <p><strong>Provenance</strong>Solid ring: investigator-added · dashed violet ring: Agent-added</p>
+      <p><strong>Collection</strong>Azure ring: Retrieved · amber dashed ring: Collection inconclusive · muted ring: no collection results</p>
+      <p><strong>Review state</strong>Solid line: Accepted into case · amber dashed line: Pending analyst review · dotted line: Rejected by analyst</p>
+      <p><strong>Analysis</strong>Azure halo: Traced path · numbered badge: Evidence count</p>
+    </div></details>
   </section>`;
 }

@@ -60,7 +60,7 @@ function assertNestedCase(value) {
     if (!isRecord(value.brief) || typeof value.brief.objective !== "string" || typeof value.brief.scope !== "string" || !["active", "on_hold", "closed"].includes(value.brief.status) || typeof value.brief.updated_at !== "string") fail("brief");
     if (typeof value.memo.gaps !== "string" || typeof value.memo.methodology !== "string") fail("findings");
     if (!Array.isArray(value.runs) || !value.runs.every((item) => isRecord(item) && typeof item.id === "string" && entityIds.has(item.entity_id) && actors.has(item.requested_by) && ["ok", "indeterminate"].includes(item.status) && Array.isArray(item.sensors) && item.sensors.every((sensor) => isRecord(sensor) && typeof sensor.name === "string" && ["queued", "running", "ok", "indeterminate"].includes(sensor.status)))) fail("runs");
-    if (!isRecord(value.ui) || !isRecord(value.ui.graph_positions) || !Object.values(value.ui.graph_positions).every((position) => isRecord(position) && Number.isFinite(position.x) && Number.isFinite(position.y)) || !Array.isArray(value.ui.dismissed_candidates) || !value.ui.dismissed_candidates.every((key) => typeof key === "string") || !["force", "lanes", "radial"].includes(value.ui.graph_layout) || !["all", 1, 2].includes(value.ui.graph_hops) || !["all", "24h", "7d", "30d"].includes(value.ui.graph_activity_window) || !["auto", "all", "focus"].includes(value.ui.graph_labels)) fail("ui state");
+    if (!isRecord(value.ui) || (value.ui.selected_entity_id !== null && !entityIds.has(value.ui.selected_entity_id)) || !isRecord(value.ui.graph_positions) || !Object.values(value.ui.graph_positions).every((position) => isRecord(position) && Number.isFinite(position.x) && Number.isFinite(position.y)) || !Array.isArray(value.ui.dismissed_candidates) || !value.ui.dismissed_candidates.every((key) => typeof key === "string") || !["force", "lanes", "radial"].includes(value.ui.graph_layout) || !["all", 1, 2].includes(value.ui.graph_hops) || !["all", "24h", "7d", "30d"].includes(value.ui.graph_activity_window) || !["auto", "all", "focus"].includes(value.ui.graph_labels)) fail("ui state");
   }
 }
 
@@ -103,7 +103,8 @@ function normalizeV2(input) {
   value.evidence = value.evidence.map((evidence) => ({ ...evidence, relevance: evidence.relevance ?? "", reading_id: evidence.reading_id ?? null, archive_status: evidence.archive_status ?? (evidence.archived_url ? "confirmed" : "not_requested"), archive_check_url: evidence.archive_check_url ?? null }));
   value.runs = Array.isArray(value.runs) ? value.runs : [];
   value.ui = isRecord(value.ui) ? value.ui : {};
-  value.ui.selected_entity_id = value.ui.selected_entity_id ?? null;
+  const entityIds = new Set(value.entities.map((entity) => entity.id));
+  value.ui.selected_entity_id = entityIds.has(value.ui.selected_entity_id) ? value.ui.selected_entity_id : null;
   value.ui.graph_positions = isRecord(value.ui.graph_positions) ? value.ui.graph_positions : {};
   value.ui.dismissed_candidates = Array.isArray(value.ui.dismissed_candidates) ? value.ui.dismissed_candidates : [];
   value.ui = normalizeGraphPreferences(value.ui);

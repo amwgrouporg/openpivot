@@ -5,6 +5,8 @@ export const ENTITY_TYPES = ["domain", "ip", "url", "org", "document", "claim"];
 export const LINK_STATUS = ["proposed", "accepted", "rejected"];
 export const ACTORS = ["human", "agent"];
 export const RELATIONSHIP_TYPES = ["resolves_to", "uses_nameserver", "registered_through", "hosted_on", "redirects_to", "references", "observed_with", "associated_with", "custom"];
+export const EVIDENCE_QUOTE_MAX_LENGTH = 4000;
+export const READING_RETENTION_LIMIT = 400;
 const SYMMETRIC_RELATIONSHIP_TYPES = new Set(["observed_with", "associated_with"]);
 
 export function uid(prefix) {
@@ -79,7 +81,7 @@ export function addEntity(c, { type, value, notes }, actor) {
   validateValue(type, v);
   const existing = c.entities.find((e) => e.type === type && e.value === v);
   if (existing) {
-    if (notes) existing.notes = [existing.notes, notes].filter(Boolean).join("\n");
+    log(c, actor, "reuse_entity", `${type} ${v}${notes ? "; supplied notes were not applied" : ""}`);
     return { entity: existing, created: false };
   }
   const entity = { id: uid("ent"), type, value: v, notes: notes ? String(notes).slice(0, 2000) : "", added_by: actor, added_at: new Date().toISOString() };
@@ -244,8 +246,9 @@ export function addEvidence(c, { entity_ids, url, quote, relevance = "", archive
   assertActor(actor);
   const ids = (Array.isArray(entity_ids) ? entity_ids : []).filter((id) => findEntity(c, id));
   if (reading_id && !c.readings.some((reading) => reading.id === reading_id)) throw new Error("reading not found");
-  const evidenceQuote = String(quote ?? "").trim().slice(0, 4000);
-  if (!evidenceQuote) throw new Error("an exact evidence quote is required");
+  const evidenceQuote = String(quote ?? "");
+  if (!evidenceQuote.trim()) throw new Error("an exact evidence quote is required");
+  if (evidenceQuote.length > EVIDENCE_QUOTE_MAX_LENGTH) throw new Error(`evidence quote must be 4,000 characters or fewer`);
   const resolvedArchiveStatus = archive_status ?? (archived_url ? "confirmed" : "not_requested");
   if (!["not_requested", "pending", "confirmed"].includes(resolvedArchiveStatus)) throw new Error("invalid archive status");
   const ev = { id: uid("evd"), entity_ids: ids, url: String(url ?? "").trim().slice(0, 2048), quote: evidenceQuote, relevance: String(relevance ?? "").trim().slice(0, 4000), captured_at: new Date().toISOString(), archived_url: archived_url ?? null, archive_status: resolvedArchiveStatus, archive_check_url: archive_check_url ?? null, added_by: actor, untrusted: true, reading_id };
@@ -256,13 +259,34 @@ export function addEvidence(c, { entity_ids, url, quote, relevance = "", archive
   return ev;
 }
 
-export function addReading(c, entityId, envelope, actor) {
+export function addReading(c, entityId, envelope, actor, { retainReadingIds = [] } = {}) {
   assertActor(actor);
   const reading = { id: uid("rdg"), entity_id: entityId, sensor: envelope.sensor, status: envelope.status, source_url: envelope.source_url, fetched_at: envelope.fetched_at, error: envelope.error, summary: summarize(envelope), raw: envelope.data, untrusted: true, requested_by: actor };
   c.readings.unshift(reading);
-  if (c.readings.length > 400) c.readings.length = 400;
+  trimReadings(c, new Set([reading.id, ...retainReadingIds]));
   log(c, actor, "reading", `${envelope.sensor} ${envelope.status}`);
   return reading;
+}
+
+function referencedReadingIds(c) {
+  const referenced = new Set();
+  for (const link of c.links ?? []) for (const citation of link.citations ?? []) {
+    if (citation.kind === "reading") referenced.add(citation.id);
+  }
+  for (const evidence of c.evidence ?? []) if (evidence.reading_id) referenced.add(evidence.reading_id);
+  return referenced;
+}
+
+function trimReadings(c, retainIds = new Set()) {
+  let excess = c.readings.length - READING_RETENTION_LIMIT;
+  if (excess <= 0) return;
+  const protectedIds = referencedReadingIds(c);
+  for (const id of retainIds) protectedIds.add(id);
+  for (let index = c.readings.length - 1; index >= 0 && excess > 0; index -= 1) {
+    if (protectedIds.has(c.readings[index].id)) continue;
+    c.readings.splice(index, 1);
+    excess -= 1;
+  }
 }
 
 export function setMemo(c, actor, text) {
@@ -359,6 +383,20 @@ export function candidatesFrom(c, entity, env) {
       break;
   }
   return out.slice(0, 60);
+}
+
+export function candidatesFromReadings(c, entity) {
+  const found = [];
+  const seen = new Set();
+  for (const reading of (c.readings ?? []).filter((item) => item.entity_id === entity.id && item.raw)) {
+    for (const candidate of candidatesFrom(c, entity, { sensor: reading.sensor, data: reading.raw })) {
+      const key = `${candidate.type}:${candidate.value}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      found.push({ ...candidate, source_reading_id: reading.id });
+    }
+  }
+  return found;
 }
 
 function markdownText(value) {

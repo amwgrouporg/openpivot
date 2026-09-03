@@ -126,11 +126,15 @@ test("renderer label modes respect the selected entity and graph density", () =>
   assert.deepEqual([...graphLabelIds(nodes, links, { requested: "focus", selectedId: "ent_1" })], ["ent_1"]);
   const denseNodes = Array.from({ length: 60 }, (_, index) => ({ id: `ent_${index}` }));
   assert.deepEqual([...graphLabelIds(denseNodes, links, { requested: "auto", selectedId: "ent_1" })].sort(), ["ent_1", "ent_2"]);
+  assert.deepEqual([...graphLabelIds(denseNodes, links, { requested: "auto", hoveredId: "ent_2" })], ["ent_2", "ent_1"]);
+
+  const boundaryNodes = Array.from({ length: 150 }, (_, index) => ({ id: `ent_${index}` }));
+  assert.deepEqual([...graphLabelIds(boundaryNodes, links, { requested: "auto", hoveredId: "ent_1" })].sort(), ["ent_1", "ent_2"]);
 
   const veryDenseNodes = Array.from({ length: 151 }, (_, index) => ({ id: `ent_${index}` }));
   assert.deepEqual(
-    [...graphLabelIds(veryDenseNodes, links, { requested: "auto", selectedId: "ent_1", pathNodeIds: ["ent_8"] })].sort(),
-    ["ent_1", "ent_8"],
+    [...graphLabelIds(veryDenseNodes, links, { requested: "auto", selectedId: "ent_1", hoveredId: "ent_2", pathNodeIds: ["ent_8"] })].sort(),
+    ["ent_1", "ent_2", "ent_8"],
   );
 });
 
@@ -227,4 +231,75 @@ test("force reset seeds distinct finite positions before restarting the simulati
   assert.equal(nodes.every((node) => Number.isFinite(node.x) && Number.isFinite(node.y)), true);
   assert.equal(new Set(nodes.map((node) => `${node.x},${node.y}`)).size, nodes.length);
   assert.equal(nodes.every((node) => node.fx === null && node.fy === null), true);
+});
+
+test("label-aware collision covers the full visible backing and returns to node spacing", async () => {
+  const { nodeCollisionRadius } = await import("../public/graph.js");
+  assert.equal(typeof nodeCollisionRadius, "function");
+  const node = { id: "a", value: "a-selector-that-is-more-than-thirty-characters.example" };
+
+  assert.equal(nodeCollisionRadius(node, new Set()), 34);
+  assert.ok(nodeCollisionRadius(node, new Set(["a"])) >= 103);
+});
+
+test("badge level of detail hides zero counts and follows focus labels", async () => {
+  const { graphBadgeIds } = await import("../public/graph.js");
+  assert.equal(typeof graphBadgeIds, "function");
+  const nodes = [
+    { id: "a", metadata: { evidenceCount: 2 } },
+    { id: "b", metadata: { evidenceCount: 0 } },
+    ...Array.from({ length: 149 }, (_, index) => ({ id: `n_${index}`, metadata: { evidenceCount: 1 } })),
+  ];
+
+  assert.deepEqual([...graphBadgeIds(nodes, [], { requested: "auto", selectedId: "a" })], ["a"]);
+  assert.deepEqual([...graphBadgeIds(nodes, [], { requested: "all" })].includes("b"), false);
+});
+
+test("retrieved collection uses the graph focus azure", async () => {
+  const { collectionColor } = await import("../public/graph.js");
+  assert.equal(collectionColor("ok"), "#6ea8fe");
+});
+
+test("pending position persistence flushes exactly once during graph teardown", async () => {
+  const { createPositionPublisher } = await import("../public/graph.js");
+  assert.equal(typeof createPositionPublisher, "function");
+  let scheduled = null;
+  const published = [];
+  const publisher = createPositionPublisher(
+    () => ({ a: { x: 12, y: 34 } }),
+    (positions) => published.push(positions),
+    {
+      setTimer(callback) { scheduled = callback; return 1; },
+      clearTimer() {},
+    },
+  );
+
+  publisher.schedule();
+  publisher.flush();
+  scheduled?.();
+
+  assert.deepEqual(published, [{ a: { x: 12, y: 34 } }]);
+});
+
+test("graph focus descriptors restore the exact path node after a retained render", async () => {
+  const { graphFocusDescriptor, restoreGraphFocus } = await import("../public/graph.js");
+  assert.equal(typeof graphFocusDescriptor, "function");
+  assert.equal(typeof restoreGraphFocus, "function");
+  const record = { dataset: { graphEntityId: "ent_path" } };
+  const active = { closest: () => record };
+  let focused = false;
+  const root = { querySelector: (selector) => selector === '[data-graph-entity-id="ent_path"]' ? { focus() { focused = true; } } : null };
+
+  const descriptor = graphFocusDescriptor(active);
+  assert.deepEqual(descriptor, { kind: "entity", id: "ent_path" });
+  assert.equal(restoreGraphFocus(root, descriptor), true);
+  assert.equal(focused, true);
+});
+
+test("minimap painting is skipped when its responsive surface is hidden", async () => {
+  const { shouldPaintMinimap } = await import("../public/graph.js");
+  assert.equal(typeof shouldPaintMinimap, "function");
+  assert.equal(shouldPaintMinimap({ viewportWidth: 999, renderedWidth: 190 }), false);
+  assert.equal(shouldPaintMinimap({ viewportWidth: 1200, renderedWidth: 0 }), false);
+  assert.equal(shouldPaintMinimap({ viewportWidth: 1200, renderedWidth: 190 }), true);
 });

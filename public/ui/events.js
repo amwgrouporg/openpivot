@@ -7,6 +7,11 @@ export function commandKeyAction(event, state = {}) {
   return null;
 }
 
+export function explicitButtonKeyAction(event) {
+  if (!['Enter', ' '].includes(event?.key)) return null;
+  return event?.target?.closest?.('[data-graph-semantic] button[data-action], [data-action="import-json-trigger"]') ? "activate" : null;
+}
+
 const FOCUS_ATTRIBUTES = [
   "data-action", "data-view-action", "data-graph-action", "data-graph-preference", "data-graph-type",
   "data-control", "data-id", "data-key", "data-lead-key", "data-parent", "href", "name", "type",
@@ -217,6 +222,11 @@ export function resetTransientUi(ui) {
   ui.pathStartId = null;
   ui.pathEndId = null;
   ui.path = null;
+  if (ui.graphFilters) {
+    ui.graphFilters.status = "active";
+    ui.graphFilters.types = [];
+  }
+  if ("relationshipFilter" in ui) ui.relationshipFilter = "all";
   ui.skipFormRestore = true;
   if ("searchQuery" in ui) ui.searchQuery = "";
   if ("searchOpen" in ui) ui.searchOpen = false;

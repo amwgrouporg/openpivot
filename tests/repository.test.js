@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { createLocalCaseRepository, migrateCaseV1 } from "../public/repository.js";
 import {
   addCompletedRun,
+  addEvidence,
+  addLink,
+  addReading,
   dismissCandidate,
   newCase,
   removeEntity,
@@ -257,6 +260,85 @@ test("completed runs are appended while active runs are refused", () => {
   addCompletedRun(caseData, complete);
   assert.deepEqual(caseData.runs, [complete]);
   assert.throws(() => addCompletedRun(caseData, { ...complete, id: "run_2", completed_at: null }), /completed/i);
+});
+
+function retentionCase() {
+  const caseData = newCase("Reading retention");
+  caseData.entities = [
+    { id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" },
+    { id: "ent_2", type: "ip", value: "192.0.2.1", notes: "", added_by: "human", added_at: "2026-09-01T10:01:00.000Z" },
+  ];
+  caseData.readings = Array.from({ length: 400 }, (_, index) => ({
+    id: `rdg_${index}`,
+    entity_id: "ent_1",
+    sensor: "dns",
+    status: "ok",
+    source_url: `https://example.com/readings/${index}`,
+    fetched_at: "2026-09-01T10:02:00.000Z",
+    error: null,
+    summary: `reading ${index}`,
+    raw: {},
+    untrusted: true,
+    requested_by: "agent",
+  }));
+  return caseData;
+}
+
+function newestEnvelope() {
+  return {
+    sensor: "dns",
+    status: "ok",
+    source_url: "https://example.com/readings/new",
+    fetched_at: "2026-09-03T10:00:00.000Z",
+    error: null,
+    data: { records: {}, rcodes: {} },
+  };
+}
+
+test("reading retention preserves a link-cited result at the 400-record boundary", () => {
+  const caseData = retentionCase();
+  addLink(caseData, {
+    from: "ent_1",
+    to: "ent_2",
+    relationship_type: "resolves_to",
+    rationale: "Historic DNS result",
+    citations: [{ kind: "reading", id: "rdg_399" }],
+  }, "human", "accepted");
+
+  addReading(caseData, "ent_1", newestEnvelope(), "agent");
+
+  assert.equal(caseData.readings.length, 400);
+  assert.equal(caseData.readings.some((reading) => reading.id === "rdg_399"), true);
+  assert.equal(caseData.readings.some((reading) => reading.id === "rdg_398"), false);
+  assert.doesNotThrow(() => createLocalCaseRepository(memoryStorage()).exportJson(caseData));
+});
+
+test("reading retention preserves an evidence source result at the 400-record boundary", () => {
+  const caseData = retentionCase();
+  addEvidence(caseData, {
+    entity_ids: ["ent_1"],
+    url: "https://example.com/source",
+    quote: "Exact historic source excerpt",
+    reading_id: "rdg_399",
+  }, "human");
+
+  addReading(caseData, "ent_1", newestEnvelope(), "agent");
+
+  assert.equal(caseData.readings.length, 400);
+  assert.equal(caseData.readings.some((reading) => reading.id === "rdg_399"), true);
+  assert.equal(caseData.readings.some((reading) => reading.id === "rdg_398"), false);
+  assert.doesNotThrow(() => createLocalCaseRepository(memoryStorage()).exportJson(caseData));
+});
+
+test("normalization clears a stale selected entity without disturbing graph preferences", () => {
+  const caseData = retentionCase();
+  caseData.ui.selected_entity_id = "ent_missing";
+  caseData.ui.graph_hops = 2;
+
+  const imported = createLocalCaseRepository(memoryStorage()).importJson(JSON.stringify(caseData));
+
+  assert.equal(imported.ui.selected_entity_id, null);
+  assert.equal(imported.ui.graph_hops, 2);
 });
 
 test("new cyber investigation cases include brief and findings fields", () => {

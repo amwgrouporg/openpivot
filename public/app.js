@@ -1,23 +1,23 @@
 // OpenPivot investigation cockpit. The browser owns the ledger; WebMCP and human
 // interactions share the same domain operations while preserving actor attribution.
 import { createLocalCaseRepository } from "./repository.js";
-import { candidatesFrom, exportMarkdown, findEntity, log } from "./store.js";
+import { candidatesFromReadings, exportMarkdown, findEntity, log } from "./store.js";
 import { sensor } from "./api.js";
 import { getModelContext, createRegistry } from "./webmcp.js";
 import { createToolset } from "./tools.js";
 import { PIVOT_SPECS, runPivot } from "./runs.js";
-import { createGraph, graphListModel, mergeGraphPositions } from "./graph.js";
+import { createGraph, graphFocusDescriptor, graphListModel, mergeGraphPositions, restoreGraphFocus } from "./graph.js";
 import { buildReviewQueue, candidateKey, dismissedCandidates, evidenceDraftFromReading, groupInvestigativeLeads, searchCase, visibleCandidates } from "./ui/view-models.js";
 import { escapeHtml, icon } from "./ui/components.js";
 import { renderShell } from "./ui/shell.js";
 import { renderOverview } from "./ui/overview.js";
 import { renderEntities } from "./ui/entities.js";
-import { captureFormState, captureSearchReturnTarget, commandKeyAction, createCaseActions, leadTriageFocusSelector, parseCandidate, resetTransientUi, resolveFocusTarget, restoreFormState } from "./ui/events.js";
+import { captureFormState, captureSearchReturnTarget, commandKeyAction, createCaseActions, explicitButtonKeyAction, leadTriageFocusSelector, parseCandidate, resetTransientUi, resolveFocusTarget, restoreFormState } from "./ui/events.js";
 import { relationshipFocusFilter, renderRelationships } from "./ui/relationships.js";
 import { renderEvidence } from "./ui/evidence.js";
 import { renderReport } from "./ui/report.js";
 import { renderSearchResults } from "./ui/search.js";
-import { graphPreferenceUpdate, nextPathSelection } from "./ui/graph-controls.js";
+import { clearGraphFilters, graphPreferenceUpdate, nextPathSelection } from "./ui/graph-controls.js";
 import { shortestPath } from "./graph-model.js";
 
 const app = document.getElementById("app");
@@ -39,7 +39,7 @@ const ui = {
   activityOpen: false,
   evidenceDraft: null,
   relationshipFilter: "all",
-  graphFilters: { status: "active", types: [], connected: false },
+  graphFilters: { status: "active", types: [] },
   pathMode: false,
   pathStartId: null,
   pathEndId: null,
@@ -53,20 +53,51 @@ const ui = {
   searchReturnFocus: null,
 };
 
+let caseRevision = 0;
+const activePivots = new Map();
+
+function cancelPivots(entityId = null) {
+  for (const [id, token] of activePivots) {
+    if (entityId && id !== entityId) continue;
+    token.controller.abort();
+    activePivots.delete(id);
+    if (ui.activeRun?.id === token.runId) ui.activeRun = null;
+  }
+}
+
+function beginPivot(entity) {
+  cancelPivots(entity.id);
+  const token = {
+    caseData,
+    caseRevision,
+    entityId: entity.id,
+    entityType: entity.type,
+    entityValue: entity.value,
+    controller: new AbortController(),
+    runId: null,
+  };
+  activePivots.set(entity.id, token);
+  return token;
+}
+
+function pivotIsCurrent(token) {
+  if (!token || token.controller.signal.aborted || token.caseRevision !== caseRevision || token.caseData !== caseData) return false;
+  if (activePivots.get(token.entityId) !== token) return false;
+  const entity = findEntity(caseData, token.entityId);
+  return Boolean(entity && entity.type === token.entityType && entity.value === token.entityValue);
+}
+
+function replaceCase(nextCase) {
+  cancelPivots();
+  caseRevision += 1;
+  caseData = nextCase;
+  return caseData;
+}
+
 function hydrateCandidates() {
   const next = new Map();
   for (const entity of caseData.entities) {
-    const found = [];
-    const seen = new Set();
-    for (const reading of caseData.readings.filter((item) => item.entity_id === entity.id && item.raw)) {
-      const envelope = { sensor: reading.sensor, data: reading.raw };
-      for (const candidate of candidatesFrom(caseData, entity, envelope)) {
-        const key = `${candidate.type}:${candidate.value}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        found.push({ ...candidate, source_reading_id: reading.id });
-      }
-    }
+    const found = candidatesFromReadings(caseData, entity);
     if (found.length) next.set(entity.id, found);
   }
   ui.candidates = next;
@@ -92,9 +123,8 @@ function graphFilterOptions(referenceNow = new Date().toISOString()) {
   const status = ui.graphFilters.status;
   const filters = status === "all" ? { includeRejected: true } : status === "active" ? {} : { statuses: [status] };
   filters.types = ui.graphFilters.types;
-  if (ui.graphFilters.connected && ui.selected) filters.connectedTo = ui.selected;
   filters.selectedId = ui.selected;
-  filters.hops = ui.graphFilters.connected ? 1 : caseData.ui.graph_hops;
+  filters.hops = ui.selected ? caseData.ui.graph_hops : "all";
   filters.activityWindow = caseData.ui.graph_activity_window;
   filters.layout = caseData.ui.graph_layout;
   filters.labels = caseData.ui.graph_labels;
@@ -123,31 +153,47 @@ function handleGraphEntitySelection(id, referenceNow = new Date().toISOString())
     ui.pathStartId = next.pathStartId;
     ui.pathEndId = next.pathEndId;
     ui.path = next.path;
-    render(referenceNow);
+    render(referenceNow, { graphDataChanged: false });
     return;
   }
   ui.selected = id;
   caseData.ui.selected_entity_id = id;
   repository.save(caseData);
-  render(referenceNow);
+  render(referenceNow, { graphDataChanged: caseData.ui.graph_hops !== "all" || caseData.ui.graph_layout === "radial" });
   focusSelector("[data-workbench-title]");
 }
 
 async function executeEntityPivot(entity, type, archive = false, actor = "human") {
   if (!PIVOT_SPECS[type]) throw new Error(`${type} entities do not have an automatic pivot`);
+  const token = beginPivot(entity);
   const specs = PIVOT_SPECS[type](entity, archive);
-  const result = await runPivot({
-    caseData,
-    entity,
-    actor,
-    specs,
-    sensorCall: sensor,
-    onUpdate(run) {
-      ui.activeRun = JSON.parse(JSON.stringify(run));
-      render();
-    },
-  });
+  let result;
+  try {
+    result = await runPivot({
+      caseData: token.caseData,
+      entity,
+      actor,
+      specs,
+      sensorCall: sensor,
+      canCommit: () => pivotIsCurrent(token),
+      signal: token.controller.signal,
+      onUpdate(run) {
+        if (!pivotIsCurrent(token)) return;
+        token.runId = run.id;
+        ui.activeRun = JSON.parse(JSON.stringify(run));
+        render(undefined, { graphDataChanged: false });
+      },
+    });
+  } catch (error) {
+    if (activePivots.get(token.entityId) === token) activePivots.delete(token.entityId);
+    if (ui.activeRun?.id === token.runId) ui.activeRun = null;
+    throw error;
+  }
+  const stillCurrent = pivotIsCurrent(token);
+  if (activePivots.get(token.entityId) === token) activePivots.delete(token.entityId);
+  if (result.cancelled || !stillCurrent) return { ...result, cancelled: true };
   ui.activeRun = result.run;
+  result.candidates = candidatesFromReadings(caseData, findEntity(caseData, entity.id));
   ui.candidates.set(entity.id, result.candidates);
   ui.selected = entity.id;
   caseData.ui.selected_entity_id = entity.id;
@@ -178,7 +224,11 @@ toolset = createToolset({
   archiveUrl,
   runEntityPivot: (entity, type, archive) => executeEntityPivot(entity, type, archive, "agent"),
   onSelect(id) { ui.selected = id; caseData.ui.selected_entity_id = id; },
-  onCandidates(id, candidates) { ui.candidates.set(id, candidates); },
+  onCandidates(id) {
+    const entity = findEntity(caseData, id);
+    if (entity) ui.candidates.set(id, candidatesFromReadings(caseData, entity));
+    else ui.candidates.delete(id);
+  },
 });
 
 function counts(queue) {
@@ -211,18 +261,50 @@ function activeContent(queue, webmcpState, referenceNow) {
   if (ui.view === "overview") return { contentHtml: renderOverview({ caseData, queue, webmcpState, leadGroups: groupInvestigativeLeads(caseData, ui.candidates), selectedLeadKeys: ui.selectedLeadKeys }), workbenchHtml: "" };
   if (ui.view === "entities") {
     const selected = ui.selected ? findEntity(caseData, ui.selected) : null;
-    return renderEntities({ caseData, selected, candidates: selected ? visibleCandidates(caseData, ui.candidates, selected.id) : [], dismissedCandidates: selected ? dismissedCandidates(caseData, ui.candidates, selected.id) : [], activeRun: ui.activeRun, graphFilters: ui.graphFilters, pathState: ui, referenceNow });
+    return renderEntities({ caseData, selected, candidates: selected ? visibleCandidates(caseData, ui.candidates, selected.id) : [], dismissedCandidates: selected ? dismissedCandidates(caseData, ui.candidates, selected.id) : [], activeRun: ui.activeRun, graphFilters: ui.graphFilters, pathState: ui, referenceNow, desktop: window.innerWidth >= 1200 });
   }
   if (ui.view === "relationships") return { contentHtml: renderRelationships({ caseData, statusFilter: ui.relationshipFilter }), workbenchHtml: "" };
   if (ui.view === "evidence") return { contentHtml: renderEvidence({ caseData, draft: ui.evidenceDraft }), workbenchHtml: "" };
   return { contentHtml: renderReport({ caseData }), workbenchHtml: "" };
 }
 
-function render(referenceNow = new Date().toISOString()) {
+function patchMountedGraphCard(currentCard, replacementCard) {
+  const currentSvg = currentCard.querySelector("#graph");
+  const replacementSvg = replacementCard.querySelector("#graph");
+  currentSvg.dataset.graphPathNodes = replacementSvg.dataset.graphPathNodes;
+  currentSvg.dataset.graphPathLinks = replacementSvg.dataset.graphPathLinks;
+  const currentCount = currentCard.querySelector("[data-graph-count]");
+  const replacementCount = replacementCard.querySelector("[data-graph-count]");
+  if (currentCount && replacementCount) currentCount.textContent = replacementCount.textContent;
+  for (const selector of ["[data-graph-semantic]", ".graph-empty"]) {
+    const current = currentCard.querySelector(selector);
+    const replacement = replacementCard.querySelector(selector);
+    if (current && replacement) current.replaceWith(replacement);
+  }
+}
+
+function updateSearchInPlace() {
+  const container = app.querySelector(".case-search");
+  const input = app.querySelector("#case-search");
+  if (!container || !input) return;
+  const html = renderSearchResults(ui.searchQuery, searchCase(caseData, ui.searchQuery));
+  container.querySelector(".case-search-results")?.remove();
+  if (html) container.insertAdjacentHTML("beforeend", html);
+  container.classList.toggle("is-command-open", ui.searchOpen);
+  input.value = ui.searchQuery;
+  input.setAttribute("aria-expanded", String(Boolean(html)));
+}
+
+function render(referenceNow = new Date().toISOString(), { graphDataChanged = true } = {}) {
   const formState = ui.skipFormRestore ? null : captureFormState(app);
   ui.skipFormRestore = false;
-  graph?.destroy?.();
-  graph = null;
+  const mountedGraphCard = graph && ui.view === "entities" ? app.querySelector(".graph-card") : null;
+  const graphFocus = mountedGraphCard ? graphFocusDescriptor(document.activeElement) : null;
+  if (mountedGraphCard) mountedGraphCard.remove();
+  else {
+    graph?.destroy?.();
+    graph = null;
+  }
   const queue = buildReviewQueue(caseData, ui.candidates);
   const webmcpState = { available: Boolean(modelContext), toolNames: registry.names() };
   const graphReferenceNow = referenceNow;
@@ -243,6 +325,21 @@ function render(referenceNow = new Date().toISOString()) {
   });
   app.querySelector("[data-modal-host]").innerHTML = modalHtml();
   app.querySelector("[data-toast-host]").innerHTML = toastHtml();
+  if (mountedGraphCard) {
+    const replacementGraphCard = app.querySelector(".graph-card");
+    if (replacementGraphCard) {
+      patchMountedGraphCard(mountedGraphCard, replacementGraphCard);
+      replacementGraphCard.replaceWith(mountedGraphCard);
+      if (graph?.unavailable) {
+        const semantic = mountedGraphCard.querySelector("[data-graph-semantic]");
+        semantic?.classList.add("graph-semantic-fallback");
+        if (semantic) semantic.open = true;
+      }
+    } else {
+      graph?.destroy?.();
+      graph = null;
+    }
+  }
   restoreFormState(app, formState);
   const modal = app.querySelector("[role='dialog']");
   if (modal) {
@@ -260,14 +357,17 @@ function render(referenceNow = new Date().toISOString()) {
   if (ui.view === "entities") {
     const svg = document.getElementById("graph");
     if (svg) {
-      graph = createGraph(svg, {
+      const graphWasCreated = !graph;
+      graph ??= createGraph(svg, {
         onSelectEntity: (id) => handleGraphEntitySelection(id),
         onSelectLink: (id) => { ui.view = "relationships"; ui.relationshipFilter = "all"; ui.focusRelationship = id; render(); },
         onPositionsChange: (positions, options) => { actions.invalidateUndo(); caseData.ui.graph_positions = mergeGraphPositions(caseData.ui.graph_positions, positions, options); repository.save(caseData); },
         reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
       });
-      graph.select(ui.selected);
-      graph.update(caseData, graphFilterOptions(graphReferenceNow));
+      const interaction = { selectedId: ui.selected, pathNodeIds: ui.path?.nodeIds ?? [], pathLinkIds: ui.path?.linkIds ?? [] };
+      if (graphWasCreated || graphDataChanged) graph.update(caseData, { ...graphFilterOptions(graphReferenceNow), ...interaction });
+      else graph.updateInteraction(interaction);
+      if (graphFocus) requestAnimationFrame(() => restoreGraphFocus(svg, graphFocus));
     }
   }
 }
@@ -404,10 +504,12 @@ app.addEventListener("change", (event) => {
   if (event.target.dataset.action === "import-json") {
     const file = event.target.files?.[0];
     if (!file) return;
+    graph?.flushPositions?.();
+    cancelPivots();
     file.text().then(async (text) => {
       actions.invalidateUndo();
       resetTransientUi(ui);
-      caseData = repository.importJson(text);
+      replaceCase(repository.importJson(text));
       ui.selected = caseData.ui.selected_entity_id;
       ui.view = "overview";
       hydrateCandidates();
@@ -422,8 +524,7 @@ app.addEventListener("input", (event) => {
   if (event.target.id === "case-search") {
     ui.searchQuery = event.target.value;
     ui.searchOpen = true;
-    render();
-    focusSelector("#case-search");
+    updateSearchInPlace();
     return;
   }
   const field = event.target.dataset.findingsField;
@@ -442,6 +543,11 @@ app.addEventListener("focusout", (event) => {
 
 document.addEventListener("keydown", (event) => {
   const modal = event.target.closest?.("[role='dialog']");
+  if (explicitButtonKeyAction(event) === "activate") {
+    event.preventDefault();
+    event.target.click();
+    return;
+  }
   if (event.target.id === "case-search" && event.key === "ArrowDown") {
     const first = app.querySelector(".case-search-results [role='option']");
     if (first) { event.preventDefault(); first.focus(); }
@@ -471,8 +577,7 @@ document.addEventListener("keydown", (event) => {
     ui.searchQuery = "";
     ui.searchOpen = false;
     ui.searchReturnFocus = null;
-    ui.skipFormRestore = true;
-    render();
+    updateSearchInPlace();
     focusSelector(returnSelector || "#case-search");
     return;
   }
@@ -506,13 +611,21 @@ app.addEventListener("click", async (event) => {
       ui.pathStartId = null;
       ui.pathEndId = null;
       ui.path = null;
-      render();
+      render(undefined, { graphDataChanged: false });
       focusSelector('[data-graph-action="trace-path"]');
     }
     if (graphAction === "clear-path") {
       clearPath();
-      render();
+      render(undefined, { graphDataChanged: false });
       focusSelector('[data-graph-action="trace-path"]');
+    }
+    if (graphAction === "clear-filters") {
+      const referenceNow = new Date().toISOString();
+      const focusTarget = clearGraphFilters(caseData, ui.graphFilters);
+      recomputePathForVisibleGraph(referenceNow);
+      repository.save(caseData);
+      render(referenceNow);
+      focusSelector(focusTarget);
     }
     return;
   }
@@ -538,14 +651,6 @@ app.addEventListener("click", async (event) => {
     focusSelector(`[data-graph-type="${CSS.escape(graphType)}"]`);
     return;
   }
-  if (event.target.closest("[data-graph-connected]")) {
-    const referenceNow = new Date().toISOString();
-    ui.graphFilters.connected = !ui.graphFilters.connected;
-    recomputePathForVisibleGraph(referenceNow);
-    render(referenceNow);
-    focusSelector("[data-graph-connected]");
-    return;
-  }
   const element = event.target.closest("[data-action]");
   if (!element) return;
   const { action, id } = element.dataset;
@@ -563,10 +668,13 @@ app.addEventListener("click", async (event) => {
       download(repository.exportJson(caseData), "application/json", filename);
     }
     if (action === "new-case") { ui.returnFocus = '[data-action="new-case"]'; ui.modal = { kind: "new-case" }; render(); }
-    if (action === "confirm-new-case") { actions.invalidateUndo(); resetTransientUi(ui); caseData = repository.create(); ui.candidates.clear(); ui.view = "overview"; persist(); await toolset.syncDynamicTools(); requestAnimationFrame(() => app.querySelector("#quick-value")?.focus()); }
+    if (action === "confirm-new-case") { actions.invalidateUndo(); graph?.flushPositions?.(); cancelPivots(); resetTransientUi(ui); replaceCase(repository.create()); ui.candidates.clear(); ui.view = "overview"; persist(); await toolset.syncDynamicTools(); requestAnimationFrame(() => app.querySelector("#quick-value")?.focus()); }
     if (action === "cancel-modal") { ui.modal = null; render(); restoreReturnFocus(); }
+    if (action === "import-json-trigger") { app.querySelector('[data-action="import-json"]')?.click(); }
     if (action === "graph-select-entity") { handleGraphEntitySelection(id); return; }
-    if (action === "select-entity") { actions.selectEntity(id); ui.view = "entities"; render(); focusSelector("[data-workbench-title]"); }
+    if (action === "path-open-entity") { ui.selected = id; caseData.ui.selected_entity_id = id; repository.save(caseData); render(undefined, { graphDataChanged: caseData.ui.graph_hops !== "all" || caseData.ui.graph_layout === "radial" }); focusSelector("[data-workbench-title]"); return; }
+    if (action === "path-open-relationship") { ui.view = "relationships"; ui.relationshipFilter = "all"; ui.focusRelationship = id; render(); return; }
+    if (action === "select-entity") { actions.selectEntity(id); focusSelector("[data-workbench-title]"); }
     if (action === "close-workbench") { const closedId = ui.selected; ui.selected = null; caseData.ui.selected_entity_id = null; persist(); focusSelector(`.entity-row[data-id="${CSS.escape(closedId)}"]`); }
     if (action === "run-pivot") { actions.invalidateUndo(); await actions.runPivot(id, false); focusSelector("[data-workbench-title]"); }
     if (action === "run-pivot-archive") { actions.invalidateUndo(); await actions.runPivot(id, true); focusSelector("[data-workbench-title]"); }
@@ -605,7 +713,7 @@ app.addEventListener("click", async (event) => {
       ui.modal = { kind: "remove", id, label: entity.value, affected: { links: caseData.links.filter((link) => link.from === id || link.to === id).length, readings: caseData.readings.filter((reading) => reading.entity_id === id).length, evidence: caseData.evidence.filter((evidence) => evidence.entity_ids.includes(id)).length } };
       render();
     }
-    if (action === "confirm-remove-entity") { actions.removeEntity(id); ui.modal = null; ui.returnFocus = null; ui.toast = { message: "Entity removed", undo: true }; await toolset.syncDynamicTools(); render(); requestAnimationFrame(() => app.querySelector('[data-action="undo-removal"]')?.focus()); }
+    if (action === "confirm-remove-entity") { graph?.flushPositions?.(); cancelPivots(id); actions.removeEntity(id); clearPath(); ui.modal = null; ui.returnFocus = null; ui.toast = { message: "Entity removed", undo: true }; await toolset.syncDynamicTools(); render(); requestAnimationFrame(() => app.querySelector('[data-action="undo-removal"]')?.focus()); }
     if (action === "undo-removal") { actions.undoRemoval(); ui.toast = { message: "Entity restored", undo: false }; await toolset.syncDynamicTools(); render(); focusSelector("[data-workbench-title]"); }
     if (action === "dismiss-toast") { ui.toast = null; render(); }
     if (action === "dismiss-notice") { ui.notice = ""; render(); }
@@ -632,7 +740,17 @@ app.addEventListener("click", async (event) => {
   } catch (error) { showError(error); }
 });
 
-registry.onChange(render);
+registry.onChange(() => render(undefined, { graphDataChanged: false }));
+let wideGraphLegend = window.innerWidth >= 1200;
+window.addEventListener("resize", () => {
+  graph?.resize?.();
+  const nextWide = window.innerWidth >= 1200;
+  if (nextWide !== wideGraphLegend) {
+    const legend = app.querySelector(".graph-legend");
+    if (legend) legend.open = nextWide;
+    wideGraphLegend = nextWide;
+  }
+});
 render();
 await toolset.registerStaticTools();
 await toolset.syncDynamicTools();

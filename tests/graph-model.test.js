@@ -50,6 +50,7 @@ test("edge presentation distinguishes directional and symmetric types", () => {
     relationship_type: "resolves_to", status: "proposed", citations: [{ id: "r1" }],
   }), { directional: true, marker: "arrow-proposed", pattern: "6 5", label: "resolves to · 1 source" });
   assert.equal(edgePresentation({ relationship_type: "associated_with", status: "accepted", citations: [] }).directional, false);
+  assert.equal(edgePresentation({ relationship_type: "associated_with", status: "accepted", citations: [] }).label, "associated with");
 });
 
 test("node accessible name includes state without overclaiming", () => {
@@ -82,6 +83,23 @@ test("relationship accessible name resolves endpoints, direction, and path state
   assert.match(directional, /included in traced path/);
   assert.match(symmetric, /symmetric relationship between 192\.0\.2\.1 and example\.com/);
   assert.doesNotMatch(`${directional} ${symmetric}`, /verified|confirmed|attributed/i);
+});
+
+test("relationship accessible details include proposing actor and activity-window context", () => {
+  const label = relationshipAccessibleName({
+    id: "ab",
+    from: "a",
+    to: "b",
+    relationship_type: "resolves_to",
+    status: "proposed",
+    rationale: "DNS response",
+    asserted_by: "agent",
+    contextual: true,
+    citations: [],
+  }, fixtureCase().entities);
+
+  assert.match(label, /proposed by agent/i);
+  assert.match(label, /outside the selected case-activity window/i);
 });
 
 test("neighborhood and path traversal are undirected but preserve link ids", () => {
@@ -157,7 +175,30 @@ test("parallel edge groups are ordered by their unordered endpoints", () => {
 test("automatic label density follows the documented thresholds", () => {
   assert.equal(labelModeForCount(59, "auto"), "all");
   assert.equal(labelModeForCount(60, "auto"), "neighbors");
+  assert.equal(labelModeForCount(150, "auto"), "neighbors");
   assert.equal(labelModeForCount(151, "auto"), "focus");
+});
+
+test("stale neighborhood focus does not hide an otherwise valid graph", () => {
+  const result = filterGraph(fixtureCase(), { selectedId: "missing", hops: 1 });
+  assert.deepEqual(result.nodes.map((node) => node.id).sort(), ["a", "b", "c"]);
+  assert.equal(result.links.length, 2);
+});
+
+test("density notice follows the requested label mode", () => {
+  const caseData = newCase("Dense labels");
+  caseData.entities = Array.from({ length: 60 }, (_, index) => ({
+    id: `ent_${index}`,
+    type: "domain",
+    value: `host-${index}.example.com`,
+    notes: "",
+    added_by: "human",
+    added_at: "2026-09-03T10:00:00Z",
+  }));
+
+  assert.equal(filterGraph(caseData, { labels: "all" }).density.reduceLabels, false);
+  assert.equal(filterGraph(caseData, { labels: "all" }).density.message, "");
+  assert.equal(filterGraph(caseData, { labels: "auto" }).density.reduceLabels, true);
 });
 
 test("layouts use fixed lanes and breadth-first radial rings", () => {

@@ -2,7 +2,7 @@
   "name": "openpivot",
   "version": "0.1.0",
   "private": true,
-  "description": "An agent-driven investigation board over the open web's public record, exposed through WebMCP.",
+  "description": "An analyst-led investigation board over the open web's public record, exposed through WebMCP.",
   "license": "MIT",
   "type": "module",
   "scripts": {

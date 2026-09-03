@@ -62,6 +62,24 @@ test("adding the first domain exposes pivot_domain as tool eleven", async () => 
   assert.equal(caseData.entities[0].value, "example.com");
 });
 
+test("domain IP and URL entities expose the three dynamic pivots without changing static names", async () => {
+  const { caseData, registry, toolset } = harness();
+  caseData.entities = [
+    { id: "domain", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" },
+    { id: "ip", type: "ip", value: "192.0.2.1", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" },
+    { id: "url", type: "url", value: "https://example.com/", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" },
+  ];
+
+  await toolset.registerStaticTools();
+  await toolset.syncDynamicTools();
+
+  assert.deepEqual(registry.names(), [
+    "read_case", "add_entity", "link_entities", "attach_evidence", "search_web",
+    "lookup_wikidata", "extract_page", "build_queries", "write_memo", "export_case",
+    "pivot_domain", "pivot_ip", "pivot_url",
+  ]);
+});
+
 test("legacy link input still creates a proposed relationship", async () => {
   const caseData = newCase("Legacy call");
   caseData.entities = [
@@ -167,4 +185,74 @@ test("add_entity waits for delayed dynamic registration before returning", async
   releasePivot();
   await call;
   assert.equal(registry.names().length, 11);
+});
+
+test("stateful collection tools do not claim to be read only", async () => {
+  const { toolset } = harness();
+  const byName = new Map(toolset.staticTools.map((tool) => [tool.name, tool]));
+
+  for (const name of ["search_web", "lookup_wikidata", "extract_page"]) {
+    assert.notEqual(byName.get(name).annotations?.readOnlyHint, true, name);
+    assert.equal(byName.get(name).annotations?.untrustedContentHint, true, name);
+  }
+  assert.equal(byName.get("read_case").annotations.readOnlyHint, true);
+  assert.equal(byName.get("build_queries").annotations.readOnlyHint, true);
+  assert.equal(byName.get("export_case").annotations.readOnlyHint, true);
+});
+
+test("agent deduplication cannot append notes to an investigator entity and is audited", async () => {
+  const caseData = newCase("Actor boundary");
+  caseData.entities.push({ id: "ent_1", type: "domain", value: "example.com", notes: "Investigator context", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
+  const { registry, toolset } = harness(caseData);
+  await toolset.registerStaticTools();
+
+  const result = await registry.tools.get("add_entity").execute({ type: "domain", value: "example.com", notes: "Agent-supplied context" });
+
+  assert.equal(result.created, false);
+  assert.equal(caseData.entities[0].notes, "Investigator context");
+  assert.equal(caseData.entities[0].added_by, "human");
+  assert.equal(caseData.log[0].actor, "agent");
+  assert.equal(caseData.log[0].action, "reuse_entity");
+  assert.doesNotMatch(caseData.log[0].detail, /Agent-supplied context/);
+});
+
+test("attach_evidence publishes the exact quote length limit", () => {
+  const { toolset } = harness();
+  const descriptor = toolset.staticTools.find((tool) => tool.name === "attach_evidence");
+  assert.equal(descriptor.inputSchema.properties.quote.maxLength, 4000);
+});
+
+test("IP pivot description uses neutral allocation and organization language", () => {
+  const { toolset } = harness();
+  const description = toolset.dynamicTools.ip.description;
+  assert.match(description, /allocation/i);
+  assert.match(description, /organization/i);
+  assert.doesNotMatch(description, /ownership|geography/i);
+});
+
+test("a cancelled dynamic pivot cannot select or persist a record from a replaced case", async () => {
+  const caseData = newCase("Cancelled tool pivot");
+  caseData.entities.push({ id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
+  const registry = registryDouble();
+  const selected = [];
+  const candidateSets = [];
+  let persists = 0;
+  const toolset = createToolset({
+    getCase: () => caseData,
+    persist() { persists += 1; },
+    registry,
+    async archiveUrl() { return null; },
+    async runEntityPivot() { return { cancelled: true, readings: [], candidates: [] }; },
+    onSelect: (id) => selected.push(id),
+    onCandidates: (id, candidates) => candidateSets.push([id, candidates]),
+  });
+  await toolset.registerStaticTools();
+  await toolset.syncDynamicTools();
+
+  const result = await registry.tools.get("pivot_domain").execute({ entity_id: "ent_1" });
+
+  assert.equal(result.cancelled, true);
+  assert.deepEqual(selected, []);
+  assert.deepEqual(candidateSets, []);
+  assert.equal(persists, 0);
 });

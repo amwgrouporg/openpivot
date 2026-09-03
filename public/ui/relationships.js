@@ -1,6 +1,7 @@
 import { actorBadge, escapeHtml, formatTime, icon, safeLink, sectionHeader, statusBadge, typeBadge } from "./components.js";
 import { relationshipView } from "./view-models.js";
 import { relationshipTypeLabel } from "./copy.js";
+import { relationshipPresentation } from "../graph-model.js";
 
 export function relationshipFocusFilter(currentFilter, resultingStatus) {
   return currentFilter === "all" || currentFilter === resultingStatus ? currentFilter : "all";
@@ -15,8 +16,9 @@ function citationCard(citation) {
 
 function relationshipCard(caseData, relationship) {
   const view = relationshipView(caseData, relationship);
+  const presentation = relationshipPresentation(view);
   return `<article class="relationship-card relationship-surface card" data-relationship-id="${escapeHtml(view.id)}" tabindex="-1"><div class="relationship-status-line relationship-status-line--${escapeHtml(view.status)}"></div><div class="card-body">
-    <div class="relationship-card-head"><div class="relationship-route"><span>${typeBadge(view.from.type)}<strong class="selector">${escapeHtml(view.from.value)}</strong></span>${icon("arrow")}<span>${typeBadge(view.to.type)}<strong class="selector">${escapeHtml(view.to.value)}</strong></span></div>${statusBadge(view.status)}</div>
+    <div class="relationship-card-head"><div class="relationship-route"><span>${typeBadge(view.from.type)}<strong class="selector">${escapeHtml(view.from.value)}</strong></span><span class="relationship-cue" data-relationship-cue="${presentation.cueKind}" aria-label="${presentation.cueLabel}">${presentation.cue}</span><span>${typeBadge(view.to.type)}<strong class="selector">${escapeHtml(view.to.value)}</strong></span></div>${statusBadge(view.status)}</div>
     <div class="relationship-type">${escapeHtml(relationshipTypeLabel(view.relationship_type))}</div>
     <div class="rationale"><span class="eyebrow">Rationale</span><p>${escapeHtml(view.rationale)}</p></div>
     ${view.citations.length ? `<div class="citation-list">${view.citations.map(citationCard).join("")}</div>` : '<p class="uncited-note">No direct citation attached. Review the rationale carefully.</p>'}

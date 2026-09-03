@@ -142,6 +142,36 @@ test("evidence requires a nonblank exact quote", () => {
   assert.throws(() => addEvidence(caseData, { entity_ids: ["ent_domain"], url: "https://example.com/source", quote: "   " }, "agent"), /quote/i);
 });
 
+test("evidence preserves an exact quote and rejects an over-limit excerpt", () => {
+  const caseData = fixtureCase();
+  const exact = "  Exact source excerpt with intentional spacing.\n";
+
+  const evidence = addEvidence(caseData, { entity_ids: ["ent_domain"], url: "https://example.com/source", quote: exact }, "human");
+
+  assert.equal(evidence.quote, exact);
+  assert.throws(
+    () => addEvidence(caseData, { entity_ids: ["ent_domain"], url: "https://example.com/long", quote: "x".repeat(4001) }, "human"),
+    /4,?000 characters/i,
+  );
+});
+
+test("candidate hydration merges unresolved leads across every retained reading", async () => {
+  const { candidatesFromReadings } = await import("../public/store.js");
+  assert.equal(typeof candidatesFromReadings, "function");
+  const caseData = fixtureCase();
+  const entity = caseData.entities[0];
+  caseData.entities = [entity];
+  caseData.readings = [
+    { id: "rdg_new", entity_id: entity.id, sensor: "dns", raw: { records: { A: [{ value: "192.0.2.20" }] } } },
+    { id: "rdg_old", entity_id: entity.id, sensor: "dns", raw: { records: { A: [{ value: "192.0.2.10" }] } } },
+  ];
+
+  assert.deepEqual(candidatesFromReadings(caseData, entity), [
+    { type: "ip", value: "192.0.2.20", why: "A record", source_reading_id: "rdg_new" },
+    { type: "ip", value: "192.0.2.10", why: "A record", source_reading_id: "rdg_old" },
+  ]);
+});
+
 test("markdown export renders untrusted fields literally", () => {
   const caseData = fixtureCase();
   caseData.entities[0].notes = "<script>alert(1)</script> *not emphasis*";

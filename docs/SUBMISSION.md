@@ -49,8 +49,8 @@ and writes findings the agent cannot touch. Adding a lead does not create a rela
 **How WebMCP is used.** Ten tools are registered at load with `document.modelContext.registerTool`
 and unregistered through `AbortController` plus `unregisterTool` when the browser provides it. Three pivot tools register only while an entity of
 their type is on the board, so the browser fires `toolchange` as the investigation grows.
-Read-only tools carry `readOnlyHint`; every tool that returns third-party content carries
-`untrustedContentHint`. Tool results return both `content` text and `structuredContent`. The
+Only side-effect-free tools carry `readOnlyHint`; collection tools that add audit entries or case records do not.
+Every tool that returns third-party content carries `untrustedContentHint`. Tool results return both `content` text and `structuredContent`. The
 Worker is deterministic: it validates selectors, refuses private and loopback targets, times
 out upstreams, rate-limits per client, and returns one envelope shape where any failure is
 `indeterminate` rather than an empty result presented as a negative finding. Sensors: DNS over HTTPS, RDAP via the IANA

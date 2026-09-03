@@ -1,5 +1,6 @@
 import { actorBadge, escapeHtml, formatTime, icon, sectionHeader, statusBadge, typeBadge } from "./components.js";
 import { candidateKey } from "./view-models.js";
+import { relationshipPresentation } from "../graph-model.js";
 
 function quickAdd() {
   return `<form id="entity-quick-add" class="quick-add" data-form="add-entity">
@@ -19,10 +20,11 @@ function caseBriefForm(caseData, compact = false) {
 function queueCard(item) {
   if (item.kind === "relationship") {
     const record = item.record;
+    const presentation = relationshipPresentation(record);
     return `<article class="queue-card queue-surface queue-card--decision card" data-open-relationship="${escapeHtml(item.id)}">
       <div class="queue-accent"></div><div class="card-body">
         <div class="card-row"><span class="queue-kicker">Relationship pending review</span>${statusBadge("proposed")}</div>
-        <div class="relationship-route"><span class="selector">${escapeHtml(record.from?.value)}</span>${icon("arrow")}<span class="selector">${escapeHtml(record.to?.value)}</span></div>
+        <div class="relationship-route"><span class="selector">${escapeHtml(record.from?.value)}</span><span class="relationship-cue" data-relationship-cue="${presentation.cueKind}" aria-label="${presentation.cueLabel}">${presentation.cue}</span><span class="selector">${escapeHtml(record.to?.value)}</span></div>
         <p>${escapeHtml(record.rationale)}</p>
         <button class="button button--small button--ghost" type="button" data-action="open-relationship" data-id="${escapeHtml(item.id)}">Open review</button>
       </div></article>`;

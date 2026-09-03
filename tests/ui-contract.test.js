@@ -174,9 +174,11 @@ test("graph controls expose every analyst mode", () => {
   for (const label of ["Relationship map", "Entity lanes", "Radial focus", "All entities", "1 hop", "2 hops", "Case activity", "Trace path", "Fit selection", "Graph legend"]) {
     assert.match(html, new RegExp(label));
   }
-  const withoutSelection = renderGraphControls({ preferences: {}, selectedId: null, pathMode: false, path: null, density: { message: "" } });
+  const withoutSelection = renderGraphControls({ preferences: { graph_hops: 1 }, selectedId: null, pathMode: false, path: null, density: { message: "" } });
   assert.match(withoutSelection, /data-value="radial"[^>]*disabled/);
   assert.match(withoutSelection, /data-graph-action="fit-selection"[^>]*disabled/);
+  assert.match(withoutSelection, /data-graph-preference="graph_hops" data-value="all" aria-pressed="true"/);
+  assert.match(withoutSelection, /data-graph-preference="graph_hops" data-value="1" aria-pressed="false"[^>]*disabled/);
   assert.equal(renderPathBreadcrumb(null, null), '<p class="graph-path-empty" role="status">No path is present in the current graph filters.</p>');
 });
 
@@ -191,7 +193,29 @@ test("path breadcrumb names entities and relationship types", () => {
   const html = renderPathBreadcrumb(caseData, { nodeIds: ["a", "b"], linkIds: ["ab"] });
 
   assert.match(html, /example\.com.*resolves to.*192\.0\.2\.1/);
+  assert.match(html, /<button[^>]*data-action="path-open-entity"[^>]*data-id="a"[^>]*>example\.com<\/button>/);
+  assert.match(html, /<button[^>]*data-action="path-open-relationship"[^>]*data-id="ab"[^>]*>resolves to<\/button>/);
   assert.match(html, /Clear path/);
+});
+
+test("clear graph filters resets only filtering state and returns a stable focus target", async () => {
+  const { clearGraphFilters } = await import("../public/ui/graph-controls.js");
+  assert.equal(typeof clearGraphFilters, "function");
+  const caseData = newCase("Clear filters");
+  caseData.ui.graph_layout = "lanes";
+  caseData.ui.graph_labels = "focus";
+  caseData.ui.graph_hops = 2;
+  caseData.ui.graph_activity_window = "24h";
+  const graphFilters = { status: "rejected", types: ["ip"] };
+
+  const focusTarget = clearGraphFilters(caseData, graphFilters);
+
+  assert.deepEqual(graphFilters, { status: "active", types: [] });
+  assert.equal(caseData.ui.graph_hops, "all");
+  assert.equal(caseData.ui.graph_activity_window, "all");
+  assert.equal(caseData.ui.graph_layout, "lanes");
+  assert.equal(caseData.ui.graph_labels, "focus");
+  assert.equal(focusTarget, '[data-control="graph-status-filter"]');
 });
 
 test("graph preference updates only one valid field", () => {
@@ -232,7 +256,7 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   assert.match(rendered.contentHtml, /Investigation graph/);
   assert.match(rendered.contentHtml, /data-control="graph-status-filter"/);
   assert.match(rendered.contentHtml, /data-graph-type="domain"/);
-  assert.match(rendered.contentHtml, /data-graph-connected/);
+  assert.doesNotMatch(rendered.contentHtml, /data-graph-connected/);
   assert.match(rendered.contentHtml, /data-graph-semantic/);
   assert.match(rendered.contentHtml, /class="graph-minimap"[^>]*aria-hidden="true"/);
   assert.match(rendered.contentHtml, /data-graph-hover-status[^>]*role="status"/);
@@ -240,6 +264,9 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   assert.match(rendered.contentHtml, /data-graph-semantic[\s\S]*data-action="graph-select-entity"/);
   assert.match(rendered.contentHtml, /graph-control-deck/);
   assert.match(rendered.contentHtml, /data-graph-preference="graph_layout"/);
+  assert.match(rendered.contentHtml, /<svg id="graph"[^>]*role="group"/);
+  assert.match(rendered.contentHtml, /<details class="graph-semantic" data-graph-semantic/);
+  assert.doesNotMatch(rendered.contentHtml, /class="sr-only" data-graph-semantic/);
   assert.match(rendered.workbenchHtml, /example\.com/);
   assert.match(rendered.workbenchHtml, /data-workbench-title[^>]*tabindex="-1"/);
   assert.match(rendered.workbenchHtml, /data-candidate-key="ent_1:domain:www\.example\.com"/);
@@ -247,6 +274,17 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   assert.match(rendered.workbenchHtml, /Collection in progress/);
   assert.match(rendered.workbenchHtml, /data-action="run-pivot"[^>]*disabled/);
   assert.doesNotMatch(rendered.contentHtml, /disabled[^>]*data-view-action/);
+});
+
+test("empty graph results explain active filters and expose a clear action", () => {
+  const caseData = newCase("No graph results");
+  caseData.entities.push({ id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-03T10:00:00Z" });
+
+  const html = renderEntities({ caseData, selected: caseData.entities[0], graphFilters: { status: "accepted", types: ["claim"] } }).contentHtml;
+
+  assert.match(html, /No entities match the current filters/);
+  assert.match(html, /Active filters:[\s\S]*Accepted into case[\s\S]*claim/i);
+  assert.match(html, /data-graph-action="clear-filters"[^>]*>Clear graph filters<\/button>/);
 });
 
 test("graph text alternative names both relationship endpoints and path membership", () => {
@@ -314,6 +352,58 @@ test("proposed relationship card exposes rationale, citation, and both review ch
   assert.match(html, /data-action="reject-relationship"/);
 });
 
+test("symmetric relationship cards use a bidirectional cue in graph and overview surfaces", () => {
+  const caseData = newCase("Symmetric relationship");
+  caseData.entities = [
+    { id: "ent_1", type: "domain", value: "one.example", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" },
+    { id: "ent_2", type: "domain", value: "two.example", notes: "", added_by: "human", added_at: "2026-09-01T10:01:00.000Z" },
+  ];
+  caseData.links = [{ id: "lnk_1", from: "ent_1", to: "ent_2", relationship_type: "associated_with", rationale: "Same source", asserted_by: "agent", status: "proposed", at: "2026-09-01T10:03:00.000Z", citations: [] }];
+  const record = { ...caseData.links[0], from: caseData.entities[0], to: caseData.entities[1] };
+
+  const relationshipHtml = renderRelationships({ caseData });
+  const overviewHtml = renderOverview({ caseData, queue: [{ kind: "relationship", id: "lnk_1", entity_id: "ent_1", record }], webmcpState: { available: true, toolNames: [] } });
+
+  for (const html of [relationshipHtml, overviewHtml]) {
+    assert.match(html, /data-relationship-cue="symmetric"[^>]*aria-label="Symmetric relationship"[^>]*>↔<\/span>/);
+    assert.doesNotMatch(html, /icon-arrow/);
+  }
+});
+
+test("graph legend is complete and open for desktop rendering", () => {
+  const html = renderGraphControls({ preferences: { graph_hops: "all" }, selectedId: "a", desktop: true });
+
+  assert.match(html, /<details class="graph-legend" open>/);
+  for (const phrase of ["Domain", "IP address", "Agent-added", "Retrieved", "Collection inconclusive", "Accepted into case", "Pending analyst review", "Rejected by analyst", "Traced path", "Evidence count"]) {
+    assert.match(html, new RegExp(phrase));
+  }
+});
+
+test("default graph relationship filter is labelled accepted plus pending", () => {
+  const caseData = newCase("Precise filters");
+  const html = renderEntities({ caseData, selected: null }).contentHtml;
+  assert.match(html, /<option value="active" selected>Accepted \+ pending<\/option>/);
+  assert.doesNotMatch(html, />In case<\/option>/);
+});
+
+test("focus-dependent controls fall back truthfully when filters hide the selected entity", () => {
+  const caseData = newCase("Hidden focus");
+  caseData.entities = [
+    { id: "domain", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-03T10:00:00Z" },
+    { id: "ip", type: "ip", value: "192.0.2.1", notes: "", added_by: "human", added_at: "2026-09-03T10:00:00Z" },
+  ];
+  caseData.ui.graph_layout = "radial";
+  caseData.ui.graph_hops = 2;
+
+  const html = renderEntities({ caseData, selected: caseData.entities[1], graphFilters: { status: "active", types: ["domain"] } }).contentHtml;
+
+  assert.match(html, /data-value="force" aria-pressed="true"/);
+  assert.match(html, /data-value="radial" aria-pressed="false" disabled/);
+  assert.match(html, /data-graph-preference="graph_hops" data-value="all" aria-pressed="true"/);
+  assert.match(html, /data-graph-preference="graph_hops" data-value="2" aria-pressed="false" disabled/);
+  assert.match(html, /data-graph-count>1 entities · 0 relationships/);
+});
+
 test("relationship focus changes to a filter containing the resulting status", () => {
   assert.equal(relationshipFocusFilter("proposed", "accepted"), "all");
   assert.equal(relationshipFocusFilter("accepted", "accepted"), "accepted");
@@ -327,6 +417,7 @@ test("evidence draft prefills provenance while leaving the exact quote empty", (
 
   assert.match(html, /value="https:\/\/example\.com\/source"/);
   assert.match(html, /name="quote"[^>]*><\/textarea>/);
+  assert.match(html, /name="quote"[^>]*maxlength="4000"/);
   assert.match(html, /value="ent_1" selected/);
 });
 
@@ -355,6 +446,8 @@ test("report keeps analyst editing separate from the agent draft and sources", (
   assert.match(html, /Outstanding questions and collection gaps/);
   assert.match(html, /Methodology and handling notes/);
   assert.match(html, /example\.com\/source/);
+  assert.match(html, /<button[^>]*data-action="import-json-trigger"[^>]*>Import case JSON<\/button>/);
+  assert.match(html, /<input[^>]*type="file"[^>]*data-action="import-json"[^>]*hidden/);
 });
 
 test("findings renders each collection source with its actual collection status", () => {
@@ -410,8 +503,24 @@ test("primary renderers expose view entrance and investigation surface hooks", (
 
 test("graph disclosure and path updates preserve accessible semantics", () => {
   const controls = renderGraphControls({ preferences: {}, selectedId: null, pathMode: true, pathStartId: "ent_1", path: null, density: { message: "" } });
-  assert.match(controls, /<details[^>]*class="graph-legend"/);
+  assert.match(controls, /<details[^>]*class="graph-legend"[^>]*open/);
   assert.match(controls, /graph-path-(?:instructions|empty)[^>]*(?:aria-live="polite"|role="status")/);
+});
+
+test("semantic graph records have explicit Enter and Space activation", async () => {
+  const { explicitButtonKeyAction } = await import("../public/ui/events.js");
+  assert.equal(typeof explicitButtonKeyAction, "function");
+  const target = { closest: (selector) => selector.includes("data-graph-semantic") ? { click() {} } : null };
+  assert.equal(explicitButtonKeyAction({ key: "Enter", target }), "activate");
+  assert.equal(explicitButtonKeyAction({ key: " ", target }), "activate");
+  assert.equal(explicitButtonKeyAction({ key: "Escape", target }), null);
+});
+
+test("the visible import button has explicit keyboard activation", async () => {
+  const { explicitButtonKeyAction } = await import("../public/ui/events.js");
+  const target = { closest: (selector) => selector.includes("import-json-trigger") ? { click() {} } : null };
+  assert.equal(explicitButtonKeyAction({ key: "Enter", target }), "activate");
+  assert.equal(explicitButtonKeyAction({ key: " ", target }), "activate");
 });
 
 test("case actions attach evidence and save only the analyst memo", () => {
@@ -530,12 +639,12 @@ test("case replacement clears transient UI and disables old undo", () => {
   caseData.entities.push({ id: "ent_old", type: "domain", value: "old.example", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
   const actions = createCaseActions({ getCase: () => caseData, persist() {}, setUi() {}, runEntityPivot: async () => ({}) });
   actions.removeEntity("ent_old");
-  const ui = { selected: "ent_old", activeRun: {}, evidenceDraft: {}, toast: { undo: true }, modal: {}, returnFocus: "button", focusRelationship: "lnk_1", skipFormRestore: false, pathMode: true, pathStartId: "ent_old", pathEndId: "ent_new", path: { nodeIds: ["ent_old", "ent_new"], linkIds: ["lnk_1"] } };
+  const ui = { selected: "ent_old", activeRun: {}, evidenceDraft: {}, toast: { undo: true }, modal: {}, returnFocus: "button", focusRelationship: "lnk_1", skipFormRestore: false, pathMode: true, pathStartId: "ent_old", pathEndId: "ent_new", path: { nodeIds: ["ent_old", "ent_new"], linkIds: ["lnk_1"] }, graphFilters: { status: "rejected", types: ["ip"] } };
 
   actions.invalidateUndo();
   caseData = newCase("Imported");
   resetTransientUi(ui);
 
   assert.throws(() => actions.undoRemoval(), /nothing to undo/i);
-  assert.deepEqual(ui, { selected: null, activeRun: null, evidenceDraft: null, toast: null, modal: null, returnFocus: null, focusRelationship: null, skipFormRestore: true, pathMode: false, pathStartId: null, pathEndId: null, path: null });
+  assert.deepEqual(ui, { selected: null, activeRun: null, evidenceDraft: null, toast: null, modal: null, returnFocus: null, focusRelationship: null, skipFormRestore: true, pathMode: false, pathStartId: null, pathEndId: null, path: null, graphFilters: { status: "active", types: [] } });
 });

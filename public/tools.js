@@ -4,7 +4,8 @@ import {
   addEvidence,
   addLink,
   addReading,
-  candidatesFrom,
+  candidatesFromReadings,
+  EVIDENCE_QUOTE_MAX_LENGTH,
   exportMarkdown,
   findEntity,
   log,
@@ -101,7 +102,7 @@ export function createToolset({ getCase, persist, registry, archiveUrl, runEntit
     {
       name: "attach_evidence",
       description: "Add an exact untrusted source excerpt to the evidence register with its URL, related entities, optional relevance note and optional archive request.",
-      inputSchema: obj({ entity_ids: { type: "array", items: { type: "string" }, description: "Entity ids this evidence concerns" }, url: str("Source URL"), quote: { type: "string", minLength: 1, description: "Nonblank verbatim excerpt from the source" }, relevance: str("Optional note explaining why the source excerpt matters to the investigation"), archive: { type: "boolean", description: "Submit to the Wayback Machine and store the archived URL" }, reading_id: str("Optional reading id this evidence was created from") }, ["url", "quote"]),
+      inputSchema: obj({ entity_ids: { type: "array", items: { type: "string" }, description: "Entity ids this evidence concerns" }, url: str("Source URL"), quote: { type: "string", minLength: 1, maxLength: EVIDENCE_QUOTE_MAX_LENGTH, description: "Nonblank verbatim excerpt from the source, up to 4,000 characters" }, relevance: str("Optional note explaining why the source excerpt matters to the investigation"), archive: { type: "boolean", description: "Submit to the Wayback Machine and store the archived URL" }, reading_id: str("Optional reading id this evidence was created from") }, ["url", "quote"]),
       async execute({ entity_ids, url, quote, relevance, archive, reading_id }) {
         const archiveResult = archive ? await archiveUrl(url) : null;
         const archiveFields = typeof archiveResult === "string"
@@ -116,7 +117,7 @@ export function createToolset({ getCase, persist, registry, archiveUrl, runEntit
       name: "search_web",
       description: "Web search (Brave). Returns titles, URLs and descriptions. Use build_queries first to get precise operator variants for a selector.",
       inputSchema: obj({ query: str("Search query, operators allowed"), count: { type: "integer", minimum: 1, maximum: 20, description: "Results, default 10" } }, ["query"]),
-      annotations: { readOnlyHint: true, untrustedContentHint: true },
+      annotations: { untrustedContentHint: true },
       async execute({ query, count }) {
         const envelope = await sensor("search", { q: query, count });
         log(getCase(), "agent", "search_web", query);
@@ -128,7 +129,7 @@ export function createToolset({ getCase, persist, registry, archiveUrl, runEntit
       name: "lookup_wikidata",
       description: "Search Wikidata for an organization, place or concept. Returns ids, labels and descriptions.",
       inputSchema: obj({ query: str("Name to look up") }, ["query"]),
-      annotations: { readOnlyHint: true, untrustedContentHint: true },
+      annotations: { untrustedContentHint: true },
       async execute({ query }) {
         const envelope = await sensor("wikidata", { q: query });
         log(getCase(), "agent", "lookup_wikidata", query);
@@ -140,14 +141,14 @@ export function createToolset({ getCase, persist, registry, archiveUrl, runEntit
       name: "extract_page",
       description: "Fetch one public http(s) URL and return its title, readable text and outbound links as untrusted external content. If the URL already exists as an entity, the collection result is attached to it.",
       inputSchema: obj({ url: str("Public http(s) URL") }, ["url"]),
-      annotations: { readOnlyHint: true, untrustedContentHint: true },
+      annotations: { untrustedContentHint: true },
       async execute({ url }) {
         const envelope = await sensor("extract", { url });
         const caseData = getCase();
         const entity = caseData.entities.find((item) => item.type === "url" && item.value === String(url).trim());
         if (entity) {
-          const reading = addReading(caseData, entity.id, envelope, "agent");
-          const candidates = candidatesFrom(caseData, entity, envelope).map((candidate) => ({ ...candidate, source_reading_id: reading.id }));
+          addReading(caseData, entity.id, envelope, "agent");
+          const candidates = candidatesFromReadings(caseData, entity);
           onCandidates(entity.id, candidates);
         } else log(caseData, "agent", "extract_page", url);
         persist();
@@ -188,6 +189,9 @@ export function createToolset({ getCase, persist, registry, archiveUrl, runEntit
     async execute(args) {
       const entity = resolveEntity(getCase(), args, type);
       const result = await runEntityPivot(entity, type, Boolean(args?.archive));
+      if (result.cancelled) {
+        return { cancelled: true, readings: [], candidates: [], note: "The case or entity changed before collection completed; no results were committed." };
+      }
       onCandidates(entity.id, result.candidates ?? []);
       onSelect(entity.id);
       persist();
@@ -197,7 +201,7 @@ export function createToolset({ getCase, persist, registry, archiveUrl, runEntit
 
   const dynamicTools = {
     domain: pivotDescriptor("domain", "pivot_domain", "Collect DNS, RDAP registration, certificate transparency, Web archive and URL-scan results for one domain in parallel. Returns collection results plus investigative leads not yet added as entities."),
-    ip: pivotDescriptor("ip", "pivot_ip", "Collect RDAP network allocation, IP ownership/geography and reverse-DNS results for one IP address. Returns collection results plus investigative leads."),
+    ip: pivotDescriptor("ip", "pivot_ip", "Collect RDAP network allocation, network-organization context and reverse-DNS results for one IP address. Returns collection results plus investigative leads."),
     url: pivotDescriptor("url", "pivot_url", "Collect Web archive and readable-text extraction results for one URL. Set archive=true to request a fresh archive capture. External text remains untrusted content."),
   };
 

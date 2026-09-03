@@ -14,7 +14,7 @@ import { relationshipTypeLabel } from "./ui/copy.js";
 
 const COLORS = { domain: "#6ea8fe", ip: "#f2bd4a", url: "#59d48b", org: "#bd91ff", document: "#9aa7b7", claim: "#ff7b72" };
 const EDGE_COLORS = { accepted: "#78a9d4", proposed: "#e6b85c", rejected: "#e77a73" };
-const COLLECTION_COLORS = { ok: "#59d48b", indeterminate: "#e6b85c", none: "#60758c" };
+const COLLECTION_COLORS = { ok: "#6ea8fe", indeterminate: "#e6b85c", none: "#60758c" };
 
 function finite(value) {
   return Number.isFinite(value) ? Number(value.toFixed(3)) : 0;
@@ -22,7 +22,11 @@ function finite(value) {
 
 function sourceCountLabel(link) {
   const count = link?.citations?.length ?? 0;
-  return `${count} ${count === 1 ? "source" : "sources"}`;
+  return count ? `${count} ${count === 1 ? "source" : "sources"}` : "";
+}
+
+export function collectionColor(status) {
+  return COLLECTION_COLORS[status] ?? COLLECTION_COLORS.none;
 }
 
 function idsFromDataset(value) {
@@ -77,18 +81,82 @@ export function graphListModel(caseData, filters = {}) {
   return filterGraph(caseData, { ...filters, selectedId, hops });
 }
 
-export function graphLabelIds(nodes, links, { requested = "auto", selectedId = null, pathNodeIds = [] } = {}) {
+export function graphLabelIds(nodes, links, { requested = "auto", selectedId = null, hoveredId = null, pathNodeIds = [] } = {}) {
   const mode = labelModeForCount((nodes ?? []).length, requested);
   if (mode === "all") return new Set((nodes ?? []).map((node) => node.id));
   const ids = new Set(pathNodeIds ?? []);
-  if (!selectedId) return ids;
-  ids.add(selectedId);
+  const focusIds = [...new Set([selectedId, hoveredId].filter(Boolean))];
+  for (const id of focusIds) ids.add(id);
   if (mode === "focus") return ids;
-  for (const link of links ?? []) {
-    if (link.from === selectedId) ids.add(link.to);
-    if (link.to === selectedId) ids.add(link.from);
+  for (const focusId of focusIds) for (const link of links ?? []) {
+    if (link.from === focusId) ids.add(link.to);
+    if (link.to === focusId) ids.add(link.from);
   }
   return ids;
+}
+
+export function graphBadgeIds(nodes, links, options = {}) {
+  const labelIds = graphLabelIds(nodes, links, options);
+  return new Set((nodes ?? [])
+    .filter((node) => (node.metadata?.evidenceCount ?? 0) > 0 && labelIds.has(node.id))
+    .map((node) => node.id));
+}
+
+export function nodeLabelWidth(node) {
+  return Math.min(30, String(node?.value ?? "").length) * 6.2 + 12;
+}
+
+export function nodeCollisionRadius(node, visibleLabelIds = new Set()) {
+  return visibleLabelIds.has(node?.id) ? Math.max(34, nodeLabelWidth(node) / 2 + 6) : 34;
+}
+
+export function shouldPaintMinimap({ viewportWidth = Number.POSITIVE_INFINITY, renderedWidth = 0 } = {}) {
+  return viewportWidth >= 1000 && renderedWidth > 0;
+}
+
+export function createPositionPublisher(readPositions, publish, {
+  delay = 180,
+  setTimer = setTimeout,
+  clearTimer = clearTimeout,
+} = {}) {
+  let timer = null;
+  let pending = false;
+  const flush = () => {
+    if (!pending) return false;
+    pending = false;
+    if (timer !== null) clearTimer(timer);
+    timer = null;
+    publish(readPositions());
+    return true;
+  };
+  const schedule = () => {
+    pending = true;
+    if (timer !== null) clearTimer(timer);
+    timer = setTimer(() => {
+      timer = null;
+      flush();
+    }, delay);
+  };
+  return { schedule, flush };
+}
+
+export function graphFocusDescriptor(activeElement) {
+  const record = activeElement?.closest?.("[data-graph-entity-id], [data-graph-link-id]");
+  if (record?.dataset?.graphEntityId) return { kind: "entity", id: record.dataset.graphEntityId };
+  if (record?.dataset?.graphLinkId) return { kind: "link", id: record.dataset.graphLinkId };
+  return null;
+}
+
+function attributeValue(value) {
+  return String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+export function restoreGraphFocus(root, descriptor) {
+  if (!root || !descriptor?.id || !["entity", "link"].includes(descriptor.kind)) return false;
+  const attribute = descriptor.kind === "entity" ? "data-graph-entity-id" : "data-graph-link-id";
+  const target = root.querySelector?.(`[${attribute}="${attributeValue(descriptor.id)}"]`);
+  target?.focus?.();
+  return Boolean(target);
 }
 
 export function graphEdgeLabelIds(nodes, links, {
@@ -212,10 +280,10 @@ export function createGraph(svgEl, options = {}) {
   if (typeof d3 === "undefined" || !svgEl) {
     if (unavailable) unavailable.hidden = false;
     if (semanticAlternative) {
-      semanticAlternative.classList.remove("sr-only");
       semanticAlternative.classList.add("graph-semantic-fallback");
+      semanticAlternative.open = true;
     }
-    return { update() {}, select() {}, selectEntity() {}, selectLink() {}, fit() {}, fitSelection() {}, zoom() {}, resetLayout() {}, destroy() {}, colors: COLORS, unavailable: true };
+    return { update() {}, updateInteraction() {}, select() {}, selectEntity() {}, selectLink() {}, fit() {}, fitSelection() {}, zoom() {}, resetLayout() {}, flushPositions() {}, focusEntity() { return false; }, focusLink() { return false; }, destroy() {}, colors: COLORS, unavailable: true };
   }
 
   const svg = d3.select(svgEl);
@@ -262,13 +330,22 @@ export function createGraph(svgEl, options = {}) {
   let activeLayoutSelectedId = null;
   let activeTargets = new Map();
   let paintNodes = () => {};
-  let positionTimer = null;
   let currentTransform = d3.zoomIdentity;
   let minimapState = null;
   const positions = new Map();
 
+  function snapshotPositions() {
+    const saved = {};
+    for (const node of nodesRef) if (Number.isFinite(node.x) && Number.isFinite(node.y)) saved[node.id] = { x: Math.round(node.x), y: Math.round(node.y) };
+    return saved;
+  }
+
+  const positionPublisher = createPositionPublisher(snapshotPositions, (saved) => onPositionsChange(saved, { replace: false }));
+
   function paintMinimap() {
-    if (!minimap || !nodesRef.length) return;
+    const viewportWidth = svgEl.ownerDocument?.defaultView?.innerWidth ?? Number.POSITIVE_INFINITY;
+    const renderedWidth = minimapEl?.clientWidth ?? 0;
+    if (!minimap || !nodesRef.length || !shouldPaintMinimap({ viewportWidth, renderedWidth })) return;
     const miniWidth = minimapEl.clientWidth || 190;
     const miniHeight = minimapEl.clientHeight || 116;
     const xs = nodesRef.map((node) => Number.isFinite(node.x) ? node.x : 0);
@@ -341,15 +418,10 @@ export function createGraph(svgEl, options = {}) {
     .force("center", d3.forceCenter(width / 2, height / 2))
     .force("x", d3.forceX(() => width / 2).strength(0.045))
     .force("y", d3.forceY(() => height / 2).strength(0.045))
-    .force("collide", d3.forceCollide(34));
+    .force("collide", d3.forceCollide((node) => nodeCollisionRadius(node, labelIdsRef)));
 
   function publishPositions() {
-    clearTimeout(positionTimer);
-    positionTimer = setTimeout(() => {
-      const saved = {};
-      for (const node of nodesRef) if (Number.isFinite(node.x) && Number.isFinite(node.y)) saved[node.id] = { x: Math.round(node.x), y: Math.round(node.y) };
-      onPositionsChange(saved, { replace: false });
-    }, 180);
+    positionPublisher.schedule();
   }
 
   function neighborIds() {
@@ -371,6 +443,20 @@ export function createGraph(svgEl, options = {}) {
 
   function applyPresentation() {
     const neighbors = neighborIds();
+    labelIdsRef = graphLabelIds(nodesRef, activeLayoutLinks, {
+      requested: requestedLabels,
+      selectedId: selectedEntityId,
+      hoveredId: hoveredEntityId,
+      pathNodeIds: pathNodeIdsRef,
+    });
+    const badgeIds = graphBadgeIds(nodesRef, activeLayoutLinks, {
+      requested: requestedLabels,
+      selectedId: selectedEntityId,
+      hoveredId: hoveredEntityId,
+      pathNodeIds: pathNodeIdsRef,
+    });
+    simulation.force("collide").radius((node) => nodeCollisionRadius(node, labelIdsRef));
+    if (!reducedMotion && hoveredEntityId && simulation.alpha() < 0.08) simulation.alpha(0.08).restart();
     if (allNodesRef) {
       const context = { selectedId: selectedEntityId, hoveredId: hoveredEntityId, neighborIds: neighbors, pathNodeIds: pathNodeIdsRef };
       allNodesRef
@@ -379,6 +465,7 @@ export function createGraph(svgEl, options = {}) {
       allNodesRef.select("circle.node-halo").attr("stroke", (item) => item.id === selectedEntityId ? "#8fc0ff" : "transparent");
       allNodesRef.select("text.node-label").attr("display", (item) => labelIdsRef.has(item.id) ? null : "none");
       allNodesRef.select("rect.node-label-backing").attr("display", (item) => labelIdsRef.has(item.id) ? null : "none");
+      allNodesRef.select("g.node-evidence-badge").attr("display", (item) => badgeIds.has(item.id) ? null : "none");
     }
     if (allLinksRef) {
       const edgeLabelIds = graphEdgeLabelIds(nodesRef, activeLayoutLinks, {
@@ -399,7 +486,7 @@ export function createGraph(svgEl, options = {}) {
         return classes.join(" ");
       });
       allLinksRef.select("text.edge-label").attr("display", (item) => edgeLabelIds.has(item.id) ? null : "none");
-      allLinksRef.select("text.edge-citation").attr("display", (item) => edgeLabelIds.has(item.id) ? null : "none");
+      allLinksRef.select("text.edge-citation").attr("display", (item) => edgeLabelIds.has(item.id) && (item.citations?.length ?? 0) > 0 ? null : "none");
     }
   }
 
@@ -427,9 +514,10 @@ export function createGraph(svgEl, options = {}) {
     width = svgEl.clientWidth || width;
     height = svgEl.clientHeight || height;
     const model = graphListModel(caseData, filters);
-    pathNodeIdsRef = idsFromDataset(svgEl.dataset.graphPathNodes);
-    pathLinkIdsRef = idsFromDataset(svgEl.dataset.graphPathLinks);
+    pathNodeIdsRef = filters.pathNodeIds ? new Set(filters.pathNodeIds) : idsFromDataset(svgEl.dataset.graphPathNodes);
+    pathLinkIdsRef = filters.pathLinkIds ? new Set(filters.pathLinkIds) : idsFromDataset(svgEl.dataset.graphPathLinks);
     requestedLabels = filters.labels ?? filters.graph_labels ?? "auto";
+    if (Object.hasOwn(filters, "selectedId")) selectedEntityId = filters.selectedId;
     const nodes = model.nodes.map((node) => {
       const previous = positions.get(node.id) ?? {};
       const positioned = node.position ?? {};
@@ -437,8 +525,10 @@ export function createGraph(svgEl, options = {}) {
       positions.set(node.id, next);
       return next;
     });
-    const layout = filters.layout ?? filters.graph_layout ?? "force";
-    const layoutSelectedId = filters.selectedId ?? selectedEntityId;
+    const requestedLayout = filters.layout ?? filters.graph_layout ?? "force";
+    const requestedSelectedId = filters.selectedId ?? selectedEntityId;
+    const layoutSelectedId = nodes.some((node) => node.id === requestedSelectedId) ? requestedSelectedId : null;
+    const layout = requestedLayout === "radial" && !layoutSelectedId ? "force" : requestedLayout;
     const targets = layoutTargets(nodes, model.links, { layout, selectedId: layoutSelectedId, width, height });
     activeLayout = layout;
     activeLayoutLinks = model.links;
@@ -463,6 +553,7 @@ export function createGraph(svgEl, options = {}) {
     linkEnter.append("text").attr("class", "edge-citation").attr("text-anchor", "middle");
     linkEnter.append("title");
     const allLinks = linkEnter.merge(link)
+      .attr("data-graph-link-id", (item) => item.id)
       .attr("aria-label", (item) => relationshipAccessibleName(item, nodes, { inPath: pathLinkIdsRef.has(item.id) }));
     allLinksRef = allLinks;
     allLinks.select("path.edge-line")
@@ -504,12 +595,12 @@ export function createGraph(svgEl, options = {}) {
     evidenceBadge.append("circle").attr("r", 7);
     evidenceBadge.append("text").attr("dy", ".33em").attr("text-anchor", "middle");
     enter.append("title");
-    const allNodes = enter.merge(node);
+    const allNodes = enter.merge(node).attr("data-graph-entity-id", (item) => item.id);
     allNodesRef = allNodes;
     labelIdsRef = graphLabelIds(nodes, model.links, { requested: requestedLabels, selectedId: filters.selectedId ?? selectedEntityId, pathNodeIds: pathNodeIdsRef });
     allNodes.select("circle.node-type-disc").attr("fill", (item) => COLORS[item.type] ?? "#9aa7b7");
     allNodes.select("circle.node-collection-ring")
-      .attr("stroke", (item) => COLLECTION_COLORS[item.metadata?.collectionStatus] ?? COLLECTION_COLORS.none)
+      .attr("stroke", (item) => collectionColor(item.metadata?.collectionStatus))
       .attr("stroke-dasharray", (item) => item.metadata?.collectionStatus === "indeterminate" ? "3 3" : null);
     allNodes.select("circle.node-provenance-ring")
       .attr("stroke", (item) => item.added_by === "agent" ? "#c19aff" : "#7f9bb7")
@@ -517,8 +608,8 @@ export function createGraph(svgEl, options = {}) {
     allNodes.select("path.node-glyph").attr("d", (item) => ENTITY_GLYPHS[item.type] ?? ENTITY_GLYPHS.document);
     allNodes.select("text.node-label").text((item) => item.value.length > 30 ? `${item.value.slice(0, 28)}…` : item.value);
     allNodes.select("rect.node-label-backing")
-      .attr("width", (item) => Math.min(30, item.value.length) * 6.2 + 12)
-      .attr("x", (item) => -(Math.min(30, item.value.length) * 6.2 + 12) / 2);
+      .attr("width", nodeLabelWidth)
+      .attr("x", (item) => -nodeLabelWidth(item) / 2);
     allNodes.select("g.node-evidence-badge text").text((item) => item.metadata?.evidenceCount ?? 0);
     allNodes.select("title").text((item) => nodeAccessibleName({ ...item, inPath: pathNodeIdsRef.has(item.id) }));
     applyPresentation();
@@ -575,7 +666,6 @@ export function createGraph(svgEl, options = {}) {
 
   function selectEntity(id) {
     selectedEntityId = id;
-    labelIdsRef = graphLabelIds(nodesRef, activeLayoutLinks, { requested: requestedLabels, selectedId: id, pathNodeIds: pathNodeIdsRef });
     applyPresentation();
   }
 
@@ -592,6 +682,39 @@ export function createGraph(svgEl, options = {}) {
     applyPresentation();
   }
 
+  function updateInteraction({ selectedId = selectedEntityId, pathNodeIds = pathNodeIdsRef, pathLinkIds = pathLinkIdsRef } = {}) {
+    selectedEntityId = selectedId;
+    pathNodeIdsRef = pathNodeIds instanceof Set ? new Set(pathNodeIds) : new Set(pathNodeIds ?? []);
+    pathLinkIdsRef = pathLinkIds instanceof Set ? new Set(pathLinkIds) : new Set(pathLinkIds ?? []);
+    applyPresentation();
+  }
+
+  function focusEntity(id) {
+    return restoreGraphFocus(svgEl, { kind: "entity", id });
+  }
+
+  function focusLink(id) {
+    return restoreGraphFocus(svgEl, { kind: "link", id });
+  }
+
+  function resize() {
+    const nextWidth = svgEl.clientWidth || width;
+    const nextHeight = svgEl.clientHeight || height;
+    if (nextWidth === width && nextHeight === height) return false;
+    width = nextWidth;
+    height = nextHeight;
+    activeTargets = layoutTargets(nodesRef, activeLayoutLinks, { layout: activeLayout, selectedId: activeLayoutSelectedId, width, height });
+    configureLayout(activeLayout, activeTargets, activeLayoutSelectedId);
+    if (reducedMotion) settleImmediately(simulation, paintNodes);
+    else simulation.alpha(0.35).restart();
+    paintMinimap();
+    return true;
+  }
+
+  const ResizeObserverClass = svgEl.ownerDocument?.defaultView?.ResizeObserver ?? globalThis.ResizeObserver;
+  const resizeObserver = typeof ResizeObserverClass === "function" ? new ResizeObserverClass(resize) : null;
+  resizeObserver?.observe(svgEl);
+
   svg.on("keydown.graph-hover", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -600,7 +723,8 @@ export function createGraph(svgEl, options = {}) {
   });
 
   function destroy() {
-    clearTimeout(positionTimer);
+    positionPublisher.flush();
+    resizeObserver?.disconnect();
     simulation.stop();
     svg.on(".zoom", null).on(".graph-hover", null);
     minimap?.on("click", null).on(".drag", null);
@@ -608,5 +732,5 @@ export function createGraph(svgEl, options = {}) {
     minimap?.selectAll("*").remove();
   }
 
-  return { update, fit, fitSelection, zoom, resetLayout, destroy, select: selectEntity, selectEntity, selectLink, colors: COLORS };
+  return { update, updateInteraction, fit, fitSelection, zoom, resetLayout, resize, flushPositions: positionPublisher.flush, focusEntity, focusLink, destroy, select: selectEntity, selectEntity, selectLink, colors: COLORS };
 }
