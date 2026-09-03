@@ -75,6 +75,22 @@ export function applyNodeDrag(item, event, {
   return item;
 }
 
+export function applyLayoutFixations(nodes, {
+  layout = "force",
+  selectedId = null,
+  width = 0,
+  height = 0,
+  preserveFixedIds = new Set(),
+} = {}) {
+  for (const node of nodes ?? []) {
+    if (preserveFixedIds.has(node.id)) continue;
+    const central = layout === "radial" && node.id === selectedId;
+    node.fx = central ? width / 2 : null;
+    node.fy = central ? height / 2 : null;
+  }
+  return nodes;
+}
+
 export function graphListModel(caseData, filters = {}) {
   const selectedId = filters.selectedId ?? filters.connectedTo;
   const hops = filters.hops ?? (filters.connectedTo ? 1 : "all");
@@ -348,6 +364,7 @@ export function createGraph(svgEl, options = {}) {
   let activeLayoutSelectedId = null;
   let activeTargets = new Map();
   let paintNodes = () => {};
+  const draggingNodeIds = new Set();
   let currentTransform = d3.zoomIdentity;
   let minimapState = null;
   const positions = new Map();
@@ -511,12 +528,12 @@ export function createGraph(svgEl, options = {}) {
     }
   }
 
-  function configureLayout(layout, targets, selectedId) {
+  function configureLayout(layout, targets, selectedId, preserveFixedIds = new Set()) {
     simulation.force("center", d3.forceCenter(width / 2, height / 2));
     if (layout === "force") {
       simulation.force("x", d3.forceX(() => width / 2).strength(0.045));
       simulation.force("y", d3.forceY(() => height / 2).strength(0.045));
-      for (const node of nodesRef) { node.fx = null; node.fy = null; }
+      applyLayoutFixations(nodesRef, { layout, selectedId, width, height, preserveFixedIds });
       return;
     }
     const strength = layout === "lanes" ? 0.82 : 0.9;
@@ -525,10 +542,8 @@ export function createGraph(svgEl, options = {}) {
     for (const node of nodesRef) {
       const target = targets.get(node.id);
       if (!Number.isFinite(node.x) && target) { node.x = target.x; node.y = target.y; }
-      const central = layout === "radial" && node.id === selectedId;
-      node.fx = central ? width / 2 : null;
-      node.fy = central ? height / 2 : null;
     }
+    applyLayoutFixations(nodesRef, { layout, selectedId, width, height, preserveFixedIds });
   }
 
   function update(caseData, filters = {}) {
@@ -546,6 +561,7 @@ export function createGraph(svgEl, options = {}) {
       positions.set(node.id, next);
       return next;
     });
+    const previousLayout = activeLayout;
     const requestedLayout = filters.layout ?? filters.graph_layout ?? "force";
     const requestedSelectedId = filters.selectedId ?? selectedEntityId;
     const layoutSelectedId = nodes.some((node) => node.id === requestedSelectedId) ? requestedSelectedId : null;
@@ -557,7 +573,7 @@ export function createGraph(svgEl, options = {}) {
     activeTargets = targets;
     nodesRef = nodes;
     linksRef = model.links.map((link) => ({ ...link, source: link.from, target: link.to }));
-    configureLayout(layout, targets, layoutSelectedId);
+    configureLayout(layout, targets, layoutSelectedId, previousLayout === layout ? draggingNodeIds : new Set());
 
     const link = linkLayer.selectAll("g.graph-edge").data(linksRef, (item) => item.id);
     link.exit().remove();
@@ -592,12 +608,13 @@ export function createGraph(svgEl, options = {}) {
     node.exit().remove();
     const enter = node.enter().append("g").attr("class", "graph-node").attr("tabindex", 0).attr("role", "button")
       .call(d3.drag()
-        .on("start", (event, item) => { if (!event.active && !reducedMotion) simulation.alphaTarget(0.3).restart(); item.fx = item.x; item.fy = item.y; })
+        .on("start", (event, item) => { draggingNodeIds.add(item.id); if (!event.active && !reducedMotion) simulation.alphaTarget(0.3).restart(); item.fx = item.x; item.fy = item.y; })
         .on("drag", (event, item) => { applyNodeDrag(item, event, { reducedMotion, paint: paintNodes }); })
         .on("end", (event, item) => {
           if (!event.active) simulation.alphaTarget(0);
           const fixedPosition = activeLayout === "radial" && item.id === activeLayoutSelectedId ? { x: width / 2, y: height / 2 } : null;
           applyNodeDrag(item, event, { reducedMotion, paint: paintNodes, ending: true, fixedPosition, publish: publishPositions });
+          draggingNodeIds.delete(item.id);
         }))
       .on("click", (event, item) => { event.stopPropagation(); selectedEntityId = item.id; labelIdsRef = graphLabelIds(nodesRef, activeLayoutLinks, { requested: requestedLabels, selectedId: selectedEntityId, pathNodeIds: pathNodeIdsRef }); applyPresentation(); onSelectEntity(item.id); })
       .on("keydown", (event, item) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectedEntityId = item.id; labelIdsRef = graphLabelIds(nodesRef, activeLayoutLinks, { requested: requestedLabels, selectedId: selectedEntityId, pathNodeIds: pathNodeIdsRef }); applyPresentation(); onSelectEntity(item.id); } })

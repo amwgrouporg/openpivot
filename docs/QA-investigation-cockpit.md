@@ -11,7 +11,7 @@ Command:
 node --test tests/*.test.js
 ```
 
-Final result: 208 tests passed, 0 failed, 0 skipped, 0 cancelled, 0 todo.
+Final result: 209 tests passed, 0 failed, 0 skipped, 0 cancelled, 0 todo.
 
 The 250-entity / 500-relationship pure graph model completed in **20.840352 ms** against a
 100 ms budget. The measurement uses the same synthetic case and filter options as
@@ -213,5 +213,6 @@ exact values remain in the entity list and semantic alternative.
 15. Routine entity-view updates recreated the graph and lost zoom, focus, and pending positions. The mounted graph now updates in place, flushes true teardown state, and preserves target-scale search and selection interaction.
 16. Graph filters, semantic alternatives, relationship cues, import access, contrast, candidate merging, entity-note authority, and WebMCP read-only annotations were corrected and covered by focused regression tests.
 17. Final review found three residual presentation/state issues: stale persisted coordinates could overwrite a just-dragged node, the legend omitted entity-color mapping, and in-place path changes left stale SVG accessibility text. All three now have regressions and live browser confirmation where applicable.
+18. A same-layout update could still release an actively dragged node after reconciling its coordinates. Active drag identities now protect the full live `x/y/vx/vy/fx/fy` state through layout configuration; deliberate layout changes still reconfigure normally.
 
 Final browser console: no warnings or errors.

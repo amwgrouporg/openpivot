@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   applyNodeDrag,
+  applyLayoutFixations,
   createGraph,
   edgePath,
   graphEdgeLabelIds,
@@ -53,6 +54,24 @@ test("full graph updates preserve newer live drag coordinates over stale persist
   assert.equal(reconciled, live);
   assert.deepEqual({ x: reconciled.x, y: reconciled.y, vx: reconciled.vx, vy: reconciled.vy }, { x: 311, y: 177, vx: 2, vy: -1 });
   assert.equal(reconciled.type, "domain");
+});
+
+test("same-layout configuration preserves the complete active drag state after reconciliation", () => {
+  const live = { id: "ent_1", x: 311, y: 177, vx: 2, vy: -1, fx: 311, fy: 177 };
+  const reconciled = reconcileGraphNode(live, { id: "ent_1", type: "domain", value: "example.com" }, { x: 120, y: 80 });
+
+  applyLayoutFixations([reconciled], {
+    layout: "force",
+    selectedId: null,
+    width: 900,
+    height: 520,
+    preserveFixedIds: new Set(["ent_1"]),
+  });
+
+  assert.deepEqual(
+    { x: reconciled.x, y: reconciled.y, vx: reconciled.vx, vy: reconciled.vy, fx: reconciled.fx, fy: reconciled.fy },
+    { x: 311, y: 177, vx: 2, vy: -1, fx: 311, fy: 177 },
+  );
 });
 
 test("interaction accessibility names refresh path membership without a full graph update", () => {
