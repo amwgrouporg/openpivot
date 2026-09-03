@@ -2,6 +2,7 @@
 // positions testable even when D3 is unavailable.
 const COLORS = { domain: "#6ea8fe", ip: "#f2bd4a", url: "#59d48b", org: "#bd91ff", document: "#9aa7b7", claim: "#ff7b72" };
 import { relationshipStatusLabel, relationshipTypeLabel } from "./ui/copy.js";
+import { filterGraph } from "./graph-model.js";
 
 export function mergeGraphPositions(current, visible, { replace = false } = {}) {
   return replace ? { ...visible } : { ...(current ?? {}), ...(visible ?? {}) };
@@ -13,29 +14,9 @@ export function settleImmediately(simulation, paint) {
 }
 
 export function graphListModel(caseData, filters = {}) {
-  const allowedTypes = filters.types?.length ? new Set(filters.types) : null;
-  const allowedStatuses = filters.statuses?.length
-    ? new Set(filters.statuses)
-    : new Set(filters.includeRejected ? ["accepted", "proposed", "rejected"] : ["accepted", "proposed"]);
-  let nodes = caseData.entities.filter((entity) => !allowedTypes || allowedTypes.has(entity.type));
-  let nodeIds = new Set(nodes.map((node) => node.id));
-  let links = caseData.links.filter((link) => allowedStatuses.has(link.status) && nodeIds.has(link.from) && nodeIds.has(link.to));
-
-  if (filters.connectedTo) {
-    const connected = new Set([filters.connectedTo]);
-    for (const link of links) {
-      if (link.from === filters.connectedTo) connected.add(link.to);
-      if (link.to === filters.connectedTo) connected.add(link.from);
-    }
-    nodes = nodes.filter((node) => connected.has(node.id));
-    nodeIds = new Set(nodes.map((node) => node.id));
-    links = links.filter((link) => nodeIds.has(link.from) && nodeIds.has(link.to));
-  }
-
-  return {
-    nodes: nodes.map((node) => ({ ...node, position: caseData.ui?.graph_positions?.[node.id] ?? null })),
-    links: links.map((link) => ({ ...link })),
-  };
+  const selectedId = filters.selectedId ?? filters.connectedTo;
+  const hops = filters.hops ?? (filters.connectedTo ? 1 : "all");
+  return filterGraph(caseData, { ...filters, selectedId, hops });
 }
 
 export function createGraph(svgEl, options = {}) {

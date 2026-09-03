@@ -30,6 +30,15 @@ test("graph model carries saved node positions into rendering", () => {
   assert.deepEqual(node.position, { x: 120, y: 80 });
 });
 
+test("graph list compatibility wrapper preserves the analysis density summary", () => {
+  assert.deepEqual(graphListModel(graphCase(), {}).density, {
+    nodeCount: 3,
+    linkCount: 2,
+    reduceLabels: false,
+    message: "",
+  });
+});
+
 test("connected filter retains the selection and its direct neighbors", () => {
   const model = graphListModel(graphCase(), { connectedTo: "ent_1" });
   assert.deepEqual(model.nodes.map((node) => node.id).sort(), ["ent_1", "ent_2"]);
