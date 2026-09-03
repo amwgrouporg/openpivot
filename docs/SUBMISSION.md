@@ -35,13 +35,19 @@ pending analyst review until an investigator accepts or rejects it. Third-party 
 the tool annotations, in the envelope and in the UI, so a page that tries to instruct the
 agent remains visibly external data. The case exports as a Markdown file with the full evidence register and audit trail.
 
+The investigation graph turns those case records into a working surface: three layouts, relationship-state
+and entity-type filters, one- and two-hop neighborhoods, Case activity windows, visible-path tracing,
+keyboard-addressable records, and a complete text alternative. Directional relationship types carry arrows;
+symmetric associations do not. Collection rings and evidence counts remain record-state cues, not claims
+about source truth.
+
 **What investigators and agents can now do together.** The investigator sets the objective and scope. The agent proposes selectors,
 runs public-source collection in parallel, queues relationships with rationales, and writes a visibly unvalidated draft. The
 investigator triages leads, accepts or rejects relationships, records source relevance, documents collection gaps and methodology,
 and writes findings the agent cannot touch. Adding a lead does not create a relationship, and accepting a relationship does not claim attribution.
 
 **How WebMCP is used.** Ten tools are registered at load with `document.modelContext.registerTool`
-and unregistered through `AbortController`. Three pivot tools register only while an entity of
+and unregistered through `AbortController` plus `unregisterTool` when the browser provides it. Three pivot tools register only while an entity of
 their type is on the board, so the browser fires `toolchange` as the investigation grows.
 Read-only tools carry `readOnlyHint`; every tool that returns third-party content carries
 `untrustedContentHint`. Tool results return both `content` text and `structuredContent`. The

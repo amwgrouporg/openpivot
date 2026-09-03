@@ -131,7 +131,19 @@ test("parallel edge offsets are stable", () => {
     { id: "two", from: "a", to: "b", relationship_type: "references" },
     { id: "three", from: "b", to: "a", relationship_type: "redirects_to" },
   ];
-  assert.deepEqual([...parallelEdgeOffsets(links)], [["one", -18], ["three", 0], ["two", 18]]);
+  assert.deepEqual([...parallelEdgeOffsets(links)], [["one", -40], ["three", 0], ["two", 40]]);
+});
+
+test("parallel edge centerlines stay outside adjacent pointer hit targets", () => {
+  const links = [
+    { id: "one", from: "a", to: "b", relationship_type: "resolves_to" },
+    { id: "two", from: "a", to: "b", relationship_type: "references" },
+    { id: "three", from: "b", to: "a", relationship_type: "redirects_to" },
+  ];
+  const offsets = [...parallelEdgeOffsets(links).values()].sort((left, right) => left - right);
+
+  assert.equal((offsets[1] - offsets[0]) / 2 > 18, true);
+  assert.equal((offsets[2] - offsets[1]) / 2 > 18, true);
 });
 
 test("parallel edge groups are ordered by their unordered endpoints", () => {

@@ -219,7 +219,7 @@ export function parallelEdgeOffsets(links) {
       return directionDifference || String(left.id).localeCompare(String(right.id));
     });
     const middle = (group.length - 1) / 2;
-    group.forEach((link, index) => offsets.set(link.id, (index - middle) * 18));
+    group.forEach((link, index) => offsets.set(link.id, (index - middle) * 40));
   }
   return offsets;
 }

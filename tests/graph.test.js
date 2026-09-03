@@ -214,3 +214,17 @@ test("reset reapplies active lanes and radial layout targets", () => {
     { id: "b", x: 290, y: 200, fx: 290, fy: 200 },
   ]);
 });
+
+test("force reset seeds distinct finite positions before restarting the simulation", () => {
+  const nodes = [
+    { id: "a", x: 4, y: 4, fx: 4, fy: 4 },
+    { id: "b", x: 5, y: 5, fx: 5, fy: 5 },
+    { id: "c", x: 6, y: 6, fx: 6, fy: 6 },
+  ];
+
+  resetGraphLayoutNodes(nodes, [], { layout: "force", width: 600, height: 400 });
+
+  assert.equal(nodes.every((node) => Number.isFinite(node.x) && Number.isFinite(node.y)), true);
+  assert.equal(new Set(nodes.map((node) => `${node.x},${node.y}`)).size, nodes.length);
+  assert.equal(nodes.every((node) => node.fx === null && node.fy === null), true);
+});

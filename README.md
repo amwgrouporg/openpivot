@@ -121,6 +121,20 @@ proof of attribution. Failed or unavailable collection is shown as inconclusive,
 
 Cases remain local to the browser. Existing v1 cases migrate to a validated v2 record while the original value remains available as a recovery backup.
 
+### Investigation graph
+
+The graph is an interactive view of the local case rather than a separate source of records. It supports
+Relationship map, Entity lanes, and Radial focus layouts; accepted, pending, rejected, type, one-hop,
+two-hop, and Case activity filters; automatic or focus-only labels; shortest visible relationship paths;
+fit, fit-selection, zoom, reset, and a desktop minimap. Layout, label, activity, hop, and dragged-position
+preferences remain in the local case.
+
+Directional relationship types render arrows; `observed_with` and `associated_with` remain symmetric.
+Parallel and reverse relationships use separate selectable curves. Node glyphs identify entity type,
+rings distinguish collection state and who added the record, and numeric badges count linked evidence.
+The complete filtered graph is also available as keyboard-addressable text. At the target scale of 250
+entities and 500 relationships, the pure filter/model path is covered by a 100 ms automated budget.
+
 ## Repository layout
 
 ```

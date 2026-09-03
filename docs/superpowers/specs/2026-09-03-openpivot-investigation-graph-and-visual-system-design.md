@@ -1,6 +1,6 @@
 # OpenPivot Investigation Graph and Visual System Design
 
-Date: 2026-09-03  
+Date: 2026-09-03
 Status: Approved direction; implementation specification
 
 ## Purpose

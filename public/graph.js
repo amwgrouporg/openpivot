@@ -172,11 +172,14 @@ export function nodeStateClasses(nodeId, context = {}) {
 
 export function resetGraphLayoutNodes(nodes, links, { layout = "force", selectedId = null, width = 600, height = 400 } = {}) {
   if (layout === "force") {
-    for (const node of nodes ?? []) {
+    const items = nodes ?? [];
+    const radius = items.length > 1 ? Math.min(width, height) * 0.22 : 0;
+    for (const [index, node] of items.entries()) {
       node.fx = null;
       node.fy = null;
-      delete node.x;
-      delete node.y;
+      const angle = items.length > 1 ? index / items.length * Math.PI * 2 - Math.PI / 2 : 0;
+      node.x = width / 2 + Math.cos(angle) * radius;
+      node.y = height / 2 + Math.sin(angle) * radius;
     }
     return nodes;
   }

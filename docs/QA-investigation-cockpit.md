@@ -11,7 +11,11 @@ Command:
 node --test tests/*.test.js
 ```
 
-Result: 129 tests passed, 0 failed, 0 skipped.
+Final result: 169 tests passed, 0 failed, 0 skipped, 0 cancelled, 0 todo.
+
+The 250-entity / 500-relationship pure graph model completed in **21.768621 ms** against a
+100 ms budget. The measurement uses the same synthetic case and filter options as
+`tests/graph-performance.test.js`; the enclosing test took 23.380281 ms in the final full-suite run.
 
 Coverage added for:
 
@@ -50,26 +54,28 @@ Coverage added for:
 - directional and type-aware relationship deduplication, including explicit symmetric types;
 - truthful source-status rendering in Findings and search coverage for every visible relationship type;
 - neutral network-organization lead semantics and focus recovery after processing the final lead;
-- rejection of prompt-injection text as a lead or mutation of investigator-owned fields.
+- rejection of prompt-injection text as a lead or mutation of investigator-owned fields;
+- the 250-entity / 500-relationship pure graph budget;
+- finite, distinct force-layout positions after Reset layout; and
+- pointer separation for parallel and reverse-direction relationship paths.
 
 ## Local WebMCP flow
 
-Local Worker: `http://localhost:8788/` in the ChatGPT built-in browser.
+One local Wrangler 4.128.0 Worker was used for the entire run on port 8788. Browser surface:
+**Codex in-app browser**. An unused `http://localhost.:8788/` origin provided a genuinely empty
+local case without deleting earlier browser data.
 
 | Check | Result |
 |---|---|
-| Empty-case tools | 10 expected tools |
+| Empty-case tools | Exactly 10: `read_case`, `add_entity`, `link_entities`, `attach_evidence`, `search_web`, `lookup_wikidata`, `extract_page`, `build_queries`, `write_memo`, `export_case` |
 | Add `example.com` | `pivot_domain` appeared; count 10 → 11 |
-| Domain pivot | DNS, RDAP, certificates, Wayback, and urlscan all `ok` |
-| First A-record IP | `104.20.23.154` |
-| IP pivot | RDAP, ipinfo, and PTR all `ok` |
-| Relationship | Proposed by agent with a DNS-reading citation; accepted through human UI |
-| Injection URL | Wayback and extract both `ok`; embedded `SYSTEM NOTICE TO AI AGENTS` detected as untrusted content |
-| Injection behavior | No `verified-partner.example` entity or relationship; no destructive action; injected wording absent from evidence relevance and every investigator-owned Findings field |
-| Evidence | Verisign RDAP registration quote attached with its reading reference |
-| Memo | Separate analyst and agent sections persisted |
-| Export | Markdown export included relationship citations and both memo sections |
-| Final case | 3 entities, 1 accepted relationship, 1 evidence item, 10 readings, 13 available tools |
+| Domain pivot | DNS, RDAP, certificates, Wayback, and urlscan returned 5 `ok` readings and 14 leads |
+| Relationship boundary | Domain collection created 0 relationships; all leads remained untriaged selectors |
+| Add IP and URL | `pivot_ip` and `pivot_url` appeared; count reached 13 |
+| Injection URL | `pivot_url` ran with `archive: false`; Wayback and extract returned 2 `ok`, `untrusted` readings and 2 outbound-link leads |
+| Injection boundary | `verified-partner.example` appears in the raw untrusted extract only; it is absent from entities, relationships, evidence relevance, Investigator notes, collection gaps, and methodology |
+| Boundary snapshot | 3 entities, 0 relationships, 7 readings, 0 evidence entries, 13 available tools |
+| Populated browser-QA case | 6 entities, 5 accepted relationships, 1 pending relationship, 1 rejected relationship, 1 source-linked evidence entry |
 
 ## Cyber-investigation workflow verification
 
@@ -89,17 +95,56 @@ Local Worker: `http://localhost:8788/` in the ChatGPT built-in browser.
 | Prompt injection | No `verified-partner.example` entity or relationship; evidence relevance, Investigator notes, collection gaps, and methodology contain none of the injected wording |
 | Fresh dynamic registration | Empty case exposed 10 tools; adding `example.com` exposed 11 including `pivot_domain` |
 
-Archive submission was not repeated during this local run because it creates a public third-party side effect. The archive sensor regression test verifies the 18-second application budget and submitted-but-unconfirmed `indeterminate` shape.
+Archive submission was not repeated because it creates a public third-party side effect. The existing
+archive sensor regression verifies the 18-second application budget and submitted-but-unconfirmed
+`indeterminate` shape; this browser run passed `archive: false` explicitly.
+
+## Investigation graph browser matrix
+
+| Check | Browser result |
+|---|---|
+| Layouts | Relationship map rendered freely; Entity lanes separated all six entity types; Radial focus placed the selected domain exactly at the 309 × 520 canvas center `(154.5, 260)` |
+| Relationship direction | The seven-edge All view showed 4 directional arrow markers and 3 symmetric paths without arrows; status remains separately encoded by text, color, and line pattern |
+| Parallel / reverse edges | Three domain–IP paths used distinct curves. After QA increased adjacent curve offsets from 18 to 40, direct pointer targeting and Enter activation each opened the intended reverse `custom` relationship card rather than the symmetric path |
+| Collection / evidence state | Domain and URL nodes used the retrieved-collection ring; the domain node announced and rendered 1 evidence entry; nodes without results retained the neutral ring |
+| Neighborhoods | Selected-domain counts were 4 nodes / 5 links at 1 hop, 6 / 7 at 2 hops, and 6 / 7 for All entities |
+| Successful path | `example.com → redirects to → injected URL → references → RDAP registration record`; 3 nodes and 2 paths were emphasized |
+| No-path state | Filtering to claim + document produced 2 nodes / 0 links and the explicit “No path is present in the current graph filters” state |
+| Transient path | Clear path restored 0 emphasized nodes / paths, disabled itself, returned the instructions, and restored focus to Trace path |
+| Case activity | All activity, Last 24 hours, Last 7 days, and Last 30 days retained the explicit **Case activity** label; each current QA record remained visible as 6 nodes / 7 links |
+| Fit and zoom | Zoom moved 100% → 125% → 100%; Fit selection reached 141%; Fit graph reached 115% |
+| Minimap | Present at 1440; clicking it changed the graph translation while retaining scale; hidden at 900 and 480 by the responsive breakpoint |
+| Reset layout | Browser QA first reproduced all six force nodes collapsing to `(0,0)`; after the correction Reset produced six distinct finite positions |
+| Reload | Entity lanes and the selected domain survived reload. A dragged domain moved from `(233.022, 267.485)` to `(329.972, 223.854)` and reloaded at `(295.696, 240.871)` before force settling |
+| Keyboard and focus | Six graph nodes and six in-case edges exposed `role=button` / `tabindex=0`; Enter selected the exact reverse edge. Workbench close returned focus to its entity row, entity selection focused the workbench heading, filters restored their controls, and relationship verdicts focused the reviewed card |
+| Semantic alternative | The active graph exposed 12 alternative buttons (6 nodes + 6 in-case edges); a traced path added “included in traced path” to its 3 node and 2 relationship alternatives |
+| Reduced motion | The stylesheet contains one `prefers-reduced-motion: reduce` branch that removes transitions and animation duration; three automated graph tests cover synchronous settle, drag repaint/publish, and radial fixed-center behavior. The selected in-app browser reported the normal-motion OS preference and does not expose preference emulation |
+| Console | Final browser log query returned 0 warnings and 0 errors |
+
+Accessibility inspection found no duplicate ids. The browser accessibility tree named navigation,
+graph controls, graph nodes, relationship paths, source links, forms, workbench actions, and the
+complete text alternative. The populated graph presented 68 visible interactive controls; the optional
+entity-notes input derives its browser-accessible name from the visible placeholder.
 
 ## Responsive verification
 
-All three target widths rendered without horizontal body overflow. The application shell remained fixed to the viewport, with the main surface as the scrolling region.
+Both the populated Case overview and Entities graph were captured at all three target sizes. All six
+states rendered without horizontal body overflow. The application shell remained fixed to the viewport,
+with the main surface as the scrolling region.
 
 | Viewport | Result | Screenshot |
 |---|---|---|
-| 480 × 640 | Single-column Case overview, visible five-item bottom navigation, 40 px actions, no horizontal overflow | `docs/screenshots/cockpit-480.png` |
-| 900 × 700 | Compact rail, full-width main surface, contextual workbench overlay, readable heading and graph controls | `docs/screenshots/cockpit-900.png` |
-| 1440 × 900 | Full rail, investigation definition, review priorities, and grouped lead triage, no horizontal overflow | `docs/screenshots/cockpit-1440.png` |
+| 480 × 640 | 480 px body/main widths; overview heading 439.1 px; objective field 422 px; bottom navigation y=558–615; status bar y=615–640. Graph canvas 452 px, compact controls use an internal horizontal scroller, and minimap is hidden | `docs/screenshots/cockpit-480.png` |
+| 900 × 700 | 64 px compact rail; 475.7 px heading; 320 px overlaid workbench; graph controls 471/471 px with no overflow; minimap hidden | `docs/screenshots/cockpit-900.png` |
+| 1440 × 900 | 216 px full rail; 475.7 px heading; 558 px objective field; 430 px workbench; graph canvas remains visible beside it and the minimap is present | `docs/screenshots/cockpit-1440.png` |
+
+The in-app browser returned JPEG-encoded screenshot bytes despite `.png` filenames. Every release and
+temporary alternate capture was converted and rechecked as 8-bit RGB, non-interlaced PNG with the exact requested
+dimensions. Visual inspection covered all six captures: the overview hierarchy remains calm and readable;
+the 900 px workbench overlays without compressing controls; 480 px retains bottom navigation and hides the
+minimap; type glyphs, collection rings, evidence counts, relationship patterns, and directional markers
+remain distinguishable. At 480 px, long technical labels are compact or truncated on-canvas while their
+exact values remain in the entity list and semantic alternative.
 
 ## Accessibility and interaction checks
 
@@ -134,5 +179,7 @@ All three target widths rendered without horizontal body overflow. The applicati
 8. Findings initially displayed every collection source as Retrieved. Source models now retain and render the actual collection status.
 9. Network-provider data initially used ownership/hosting language. It is now labelled as a network-organization lead and defaults to the non-attributive `associated_with` relationship pending analyst review.
 10. Batch triage initially targeted a toolbar that disappears when the final lead is processed. Browser QA confirmed focus now lands on the resulting review heading.
+11. Relationship-map Reset layout deleted D3 coordinates after simulation initialization and collapsed every node to `(0,0)`. Force reset now seeds a deterministic ring before restarting; browser QA measured six distinct finite positions.
+12. Adjacent parallel paths were separated by only 9 px at their midpoint while each pointer hit target was 18 px wide. Deterministic curve offsets now provide 20 px midpoint separation, and direct pointer plus keyboard selection each opened the intended reverse edge.
 
 Final browser console: no warnings or errors.
