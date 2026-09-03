@@ -165,6 +165,7 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   assert.match(rendered.contentHtml, /data-graph-type="domain"/);
   assert.match(rendered.contentHtml, /data-graph-connected/);
   assert.match(rendered.contentHtml, /data-graph-semantic/);
+  assert.match(rendered.contentHtml, /data-graph-semantic[\s\S]*data-action="graph-select-entity"/);
   assert.match(rendered.contentHtml, /graph-control-deck/);
   assert.match(rendered.contentHtml, /data-graph-preference="graph_layout"/);
   assert.match(rendered.workbenchHtml, /example\.com/);

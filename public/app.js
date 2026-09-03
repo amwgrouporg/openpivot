@@ -94,6 +94,8 @@ function graphFilterOptions(referenceNow = new Date().toISOString()) {
   filters.selectedId = ui.selected;
   filters.hops = ui.graphFilters.connected ? 1 : caseData.ui.graph_hops;
   filters.activityWindow = caseData.ui.graph_activity_window;
+  filters.layout = caseData.ui.graph_layout;
+  filters.labels = caseData.ui.graph_labels;
   filters.now = referenceNow;
   return filters;
 }
@@ -111,6 +113,22 @@ function clearPath() {
   ui.pathStartId = null;
   ui.pathEndId = null;
   ui.path = null;
+}
+
+function handleGraphEntitySelection(id, referenceNow = new Date().toISOString()) {
+  if (ui.pathMode) {
+    const next = nextPathSelection({ pathStartId: ui.pathStartId, pathEndId: ui.pathEndId, path: ui.path }, id, graphListModel(caseData, graphFilterOptions(referenceNow)).links);
+    ui.pathStartId = next.pathStartId;
+    ui.pathEndId = next.pathEndId;
+    ui.path = next.path;
+    render(referenceNow);
+    return;
+  }
+  ui.selected = id;
+  caseData.ui.selected_entity_id = id;
+  repository.save(caseData);
+  render(referenceNow);
+  focusSelector("[data-workbench-title]");
 }
 
 async function executeEntityPivot(entity, type, archive = false, actor = "human") {
@@ -198,14 +216,14 @@ function activeContent(queue, webmcpState, referenceNow) {
   return { contentHtml: renderReport({ caseData }), workbenchHtml: "" };
 }
 
-function render() {
+function render(referenceNow = new Date().toISOString()) {
   const formState = ui.skipFormRestore ? null : captureFormState(app);
   ui.skipFormRestore = false;
   graph?.destroy?.();
   graph = null;
   const queue = buildReviewQueue(caseData, ui.candidates);
   const webmcpState = { available: Boolean(modelContext), toolNames: registry.names() };
-  const graphReferenceNow = new Date().toISOString();
+  const graphReferenceNow = referenceNow;
   const content = activeContent(queue, webmcpState, graphReferenceNow);
   const searchResults = searchCase(caseData, ui.searchQuery);
   const noticeHtml = ui.notice ? `<div class="notice">${icon("warning")}<span>${escapeHtml(ui.notice)}</span><button class="button button--quiet icon-button" type="button" data-action="dismiss-notice" aria-label="Dismiss error">${icon("close")}</button></div>` : "";
@@ -240,21 +258,7 @@ function render() {
     const svg = document.getElementById("graph");
     if (svg) {
       graph = createGraph(svg, {
-        onSelectEntity: (id) => {
-          if (ui.pathMode) {
-            const next = nextPathSelection({ pathStartId: ui.pathStartId, pathEndId: ui.pathEndId, path: ui.path }, id, graphListModel(caseData, graphFilterOptions(graphReferenceNow)).links);
-            ui.pathStartId = next.pathStartId;
-            ui.pathEndId = next.pathEndId;
-            ui.path = next.path;
-            render();
-            return;
-          }
-          ui.selected = id;
-          caseData.ui.selected_entity_id = id;
-          repository.save(caseData);
-          render();
-          focusSelector("[data-workbench-title]");
-        },
+        onSelectEntity: (id) => handleGraphEntitySelection(id),
         onSelectLink: (id) => { ui.view = "relationships"; ui.relationshipFilter = "all"; ui.focusRelationship = id; render(); },
         onPositionsChange: (positions, options) => { actions.invalidateUndo(); caseData.ui.graph_positions = mergeGraphPositions(caseData.ui.graph_positions, positions, options); repository.save(caseData); },
         reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
@@ -367,22 +371,25 @@ app.addEventListener("change", (event) => {
     focusSelector('[data-control="relationship-filter"]');
   }
   if (event.target.dataset.control === "graph-status-filter") {
+    const referenceNow = new Date().toISOString();
     ui.graphFilters.status = event.target.value;
-    recomputePathForVisibleGraph();
-    render();
+    recomputePathForVisibleGraph(referenceNow);
+    render(referenceNow);
     focusSelector('[data-control="graph-status-filter"]');
   }
   if (event.target.dataset.control === "graph-activity-window") {
+    const referenceNow = new Date().toISOString();
     graphPreferenceUpdate(caseData, "graph_activity_window", event.target.value);
-    recomputePathForVisibleGraph();
+    recomputePathForVisibleGraph(referenceNow);
     repository.save(caseData);
-    render();
+    render(referenceNow);
     focusSelector('[data-control="graph-activity-window"]');
   }
   if (event.target.dataset.control === "graph-label-mode") {
+    const referenceNow = new Date().toISOString();
     graphPreferenceUpdate(caseData, "graph_labels", event.target.value);
     repository.save(caseData);
-    render();
+    render(referenceNow);
     focusSelector('[data-control="graph-label-mode"]');
   }
   if (event.target.dataset.leadKey) {
@@ -472,7 +479,7 @@ app.addEventListener("click", async (event) => {
   const graphAction = event.target.closest("[data-graph-action]")?.dataset.graphAction;
   if (graphAction) {
     if (graphAction === "fit") graph?.fit();
-    if (graphAction === "fit-selection") graph?.fit();
+    if (graphAction === "fit-selection") graph?.fitSelection(ui.selected);
     if (graphAction === "in") graph?.zoom(1.25);
     if (graphAction === "out") graph?.zoom(0.8);
     if (graphAction === "reset") graph?.resetLayout?.();
@@ -493,28 +500,31 @@ app.addEventListener("click", async (event) => {
   }
   const graphPreference = event.target.closest("[data-graph-preference]");
   if (graphPreference) {
+    const referenceNow = new Date().toISOString();
     const { graphPreference: name, value } = graphPreference.dataset;
     graphPreferenceUpdate(caseData, name, value);
-    recomputePathForVisibleGraph();
+    recomputePathForVisibleGraph(referenceNow);
     repository.save(caseData);
-    render();
+    render(referenceNow);
     focusSelector(`[data-graph-preference="${name}"][data-value="${value}"]`);
     return;
   }
   const graphType = event.target.closest("[data-graph-type]")?.dataset.graphType;
   if (graphType) {
+    const referenceNow = new Date().toISOString();
     const types = new Set(ui.graphFilters.types);
     if (types.has(graphType)) types.delete(graphType); else types.add(graphType);
     ui.graphFilters.types = [...types];
-    recomputePathForVisibleGraph();
-    render();
+    recomputePathForVisibleGraph(referenceNow);
+    render(referenceNow);
     focusSelector(`[data-graph-type="${CSS.escape(graphType)}"]`);
     return;
   }
   if (event.target.closest("[data-graph-connected]")) {
+    const referenceNow = new Date().toISOString();
     ui.graphFilters.connected = !ui.graphFilters.connected;
-    recomputePathForVisibleGraph();
-    render();
+    recomputePathForVisibleGraph(referenceNow);
+    render(referenceNow);
     focusSelector("[data-graph-connected]");
     return;
   }
@@ -537,6 +547,7 @@ app.addEventListener("click", async (event) => {
     if (action === "new-case") { ui.returnFocus = '[data-action="new-case"]'; ui.modal = { kind: "new-case" }; render(); }
     if (action === "confirm-new-case") { actions.invalidateUndo(); resetTransientUi(ui); caseData = repository.create(); ui.candidates.clear(); ui.view = "overview"; persist(); await toolset.syncDynamicTools(); requestAnimationFrame(() => app.querySelector("#quick-value")?.focus()); }
     if (action === "cancel-modal") { ui.modal = null; render(); restoreReturnFocus(); }
+    if (action === "graph-select-entity") { handleGraphEntitySelection(id); return; }
     if (action === "select-entity") { actions.selectEntity(id); ui.view = "entities"; render(); focusSelector("[data-workbench-title]"); }
     if (action === "close-workbench") { const closedId = ui.selected; ui.selected = null; caseData.ui.selected_entity_id = null; persist(); focusSelector(`.entity-row[data-id="${CSS.escape(closedId)}"]`); }
     if (action === "run-pivot") { actions.invalidateUndo(); await actions.runPivot(id, false); focusSelector("[data-workbench-title]"); }

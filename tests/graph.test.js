@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { graphListModel, mergeGraphPositions, settleImmediately } from "../public/graph.js";
+import { createGraph, graphLabelIds, graphListModel, mergeGraphPositions, nodesForFit, settleImmediately } from "../public/graph.js";
 import { newCase } from "../public/store.js";
 
 function graphCase() {
@@ -68,4 +68,26 @@ test("reduced-motion settling repaints after synchronous ticks", () => {
   settleImmediately(simulation, () => calls.push(["paint"]));
 
   assert.deepEqual(calls, [["alpha", 1], ["tick", 80], ["stop"], ["paint"]]);
+});
+
+test("renderer label modes respect the selected entity and graph density", () => {
+  const nodes = [
+    { id: "ent_1" }, { id: "ent_2" }, { id: "ent_3" },
+  ];
+  const links = [{ from: "ent_1", to: "ent_2" }];
+
+  assert.deepEqual([...graphLabelIds(nodes, links, { requested: "focus", selectedId: "ent_1" })], ["ent_1"]);
+  const denseNodes = Array.from({ length: 60 }, (_, index) => ({ id: `ent_${index}` }));
+  assert.deepEqual([...graphLabelIds(denseNodes, links, { requested: "auto", selectedId: "ent_1" })].sort(), ["ent_1", "ent_2"]);
+});
+
+test("selection-aware fit excludes unrelated graph nodes", () => {
+  const nodes = [
+    { id: "ent_1", x: 20, y: 20 },
+    { id: "ent_2", x: 220, y: 220 },
+    { id: "ent_3", x: 900, y: 900 },
+  ];
+
+  assert.deepEqual(nodesForFit(nodes, "ent_2"), [{ id: "ent_2", x: 220, y: 220 }]);
+  assert.equal(typeof createGraph(null).fitSelection, "function");
 });

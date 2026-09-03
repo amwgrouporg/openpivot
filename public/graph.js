@@ -2,7 +2,7 @@
 // positions testable even when D3 is unavailable.
 const COLORS = { domain: "#6ea8fe", ip: "#f2bd4a", url: "#59d48b", org: "#bd91ff", document: "#9aa7b7", claim: "#ff7b72" };
 import { relationshipStatusLabel, relationshipTypeLabel } from "./ui/copy.js";
-import { filterGraph } from "./graph-model.js";
+import { filterGraph, labelModeForCount, layoutTargets } from "./graph-model.js";
 
 export function mergeGraphPositions(current, visible, { replace = false } = {}) {
   return replace ? { ...visible } : { ...(current ?? {}), ...(visible ?? {}) };
@@ -19,13 +19,30 @@ export function graphListModel(caseData, filters = {}) {
   return filterGraph(caseData, { ...filters, selectedId, hops });
 }
 
+export function graphLabelIds(nodes, links, { requested = "auto", selectedId = null } = {}) {
+  const mode = labelModeForCount((nodes ?? []).length, requested);
+  if (mode === "all") return new Set((nodes ?? []).map((node) => node.id));
+  if (!selectedId) return new Set();
+  if (mode === "focus") return new Set([selectedId]);
+  const ids = new Set([selectedId]);
+  for (const link of links ?? []) {
+    if (link.from === selectedId) ids.add(link.to);
+    if (link.to === selectedId) ids.add(link.from);
+  }
+  return ids;
+}
+
+export function nodesForFit(nodes, selectedId = null) {
+  return selectedId ? (nodes ?? []).filter((node) => node.id === selectedId) : [...(nodes ?? [])];
+}
+
 export function createGraph(svgEl, options = {}) {
   const onSelectEntity = options.onSelectEntity ?? options.onSelect ?? (() => {});
   const onSelectLink = options.onSelectLink ?? (() => {});
   const onPositionsChange = options.onPositionsChange ?? (() => {});
   const reducedMotion = options.reducedMotion ?? false;
   if (typeof d3 === "undefined" || !svgEl) {
-    return { update() {}, select() {}, selectEntity() {}, selectLink() {}, fit() {}, zoom() {}, resetLayout() {}, destroy() {}, colors: COLORS, unavailable: true };
+    return { update() {}, select() {}, selectEntity() {}, selectLink() {}, fit() {}, fitSelection() {}, zoom() {}, resetLayout() {}, destroy() {}, colors: COLORS, unavailable: true };
   }
 
   const svg = d3.select(svgEl);
@@ -40,6 +57,8 @@ export function createGraph(svgEl, options = {}) {
   let selectedEntityId = null;
   let selectedLinkId = null;
   let nodesRef = [];
+  let allNodesRef = null;
+  let labelIdsRef = new Set();
   let positionTimer = null;
   const positions = new Map();
   const simulation = d3.forceSimulation()
@@ -73,6 +92,20 @@ export function createGraph(svgEl, options = {}) {
       positions.set(node.id, next);
       return next;
     });
+    const layout = filters.layout ?? filters.graph_layout ?? "force";
+    const targets = layoutTargets(nodes, model.links, { layout, selectedId: filters.selectedId ?? selectedEntityId, width, height });
+    for (const node of nodes) {
+      const target = targets.get(node.id);
+      if (layout === "force") {
+        node.fx = null;
+        node.fy = null;
+      } else if (target) {
+        node.x = target.x;
+        node.y = target.y;
+        node.fx = target.x;
+        node.fy = target.y;
+      }
+    }
     nodesRef = nodes;
     const links = model.links.map((link) => ({ ...link, source: link.from, target: link.to }));
 
@@ -104,10 +137,12 @@ export function createGraph(svgEl, options = {}) {
     enter.append("text").attr("dy", 25).attr("text-anchor", "middle");
     enter.append("title");
     const allNodes = enter.merge(node).attr("aria-label", (item) => `${item.type}: ${item.value}, added by ${item.added_by}`);
+    allNodesRef = allNodes;
+    labelIdsRef = graphLabelIds(nodes, model.links, { requested: filters.labels ?? filters.graph_labels ?? "auto", selectedId: filters.selectedId ?? selectedEntityId });
     allNodes.select("circle.node-dot").attr("fill", (item) => COLORS[item.type] ?? "#9aa7b7");
     allNodes.select("circle.node-ring").attr("stroke", (item) => item.added_by === "agent" ? "#c19aff" : "#587392").attr("stroke-width", 1.2).attr("stroke-dasharray", (item) => item.added_by === "agent" ? "3,2" : null);
     allNodes.select("circle.node-halo").attr("stroke", (item) => item.id === selectedEntityId ? "#69a9ff" : "transparent").attr("stroke-width", 2);
-    allNodes.select("text").text((item) => item.value.length > 30 ? `${item.value.slice(0, 28)}…` : item.value);
+    allNodes.select("text").text((item) => item.value.length > 30 ? `${item.value.slice(0, 28)}…` : item.value).attr("display", (item) => labelIdsRef.has(item.id) ? null : "none");
     allNodes.select("title").text((item) => `${item.type}: ${item.value} (added by ${item.added_by})`);
 
     const paint = () => {
@@ -116,20 +151,28 @@ export function createGraph(svgEl, options = {}) {
     };
     simulation.nodes(nodes).on("tick", paint);
     simulation.force("link").links(links);
-    if (reducedMotion) {
+    if (layout !== "force") {
+      simulation.stop();
+      paint();
+    } else if (reducedMotion) {
       settleImmediately(simulation, paint);
     } else simulation.alpha(0.55).restart();
   }
 
-  function fit() {
-    if (!nodesRef.length) return;
-    const xs = nodesRef.map((node) => node.x ?? 0);
-    const ys = nodesRef.map((node) => node.y ?? 0);
+  function fit(selectedId = null) {
+    const targetNodes = nodesForFit(nodesRef, selectedId);
+    if (!targetNodes.length) return;
+    const xs = targetNodes.map((node) => node.x ?? 0);
+    const ys = targetNodes.map((node) => node.y ?? 0);
     const minX = Math.min(...xs) - 55, maxX = Math.max(...xs) + 55, minY = Math.min(...ys) - 55, maxY = Math.max(...ys) + 55;
     const scale = Math.min(1.5, 0.88 / Math.max((maxX - minX) / width, (maxY - minY) / height));
     const transform = d3.zoomIdentity.translate(width / 2 - scale * (minX + maxX) / 2, height / 2 - scale * (minY + maxY) / 2).scale(scale);
     if (reducedMotion) svg.call(zoomBehaviour.transform, transform);
     else svg.transition().duration(260).call(zoomBehaviour.transform, transform);
+  }
+
+  function fitSelection(selectedId = selectedEntityId) {
+    fit(selectedId);
   }
 
   function zoom(factor) {
@@ -152,6 +195,7 @@ export function createGraph(svgEl, options = {}) {
   function selectEntity(id) {
     selectedEntityId = id;
     nodeLayer.selectAll("circle.node-halo").attr("stroke", (item) => item.id === selectedEntityId ? "#69a9ff" : "transparent");
+    if (allNodesRef) allNodesRef.select("text").attr("display", (item) => labelIdsRef.has(item.id) ? null : "none");
   }
 
   function selectLink(id) {
@@ -166,5 +210,5 @@ export function createGraph(svgEl, options = {}) {
     svg.selectAll("*").remove();
   }
 
-  return { update, fit, zoom, resetLayout, destroy, select: selectEntity, selectEntity, selectLink, colors: COLORS };
+  return { update, fit, fitSelection, zoom, resetLayout, destroy, select: selectEntity, selectEntity, selectLink, colors: COLORS };
 }
