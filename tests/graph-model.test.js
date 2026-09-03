@@ -10,6 +10,7 @@ import {
   nodeAccessibleName,
   nodeMetadata,
   parallelEdgeOffsets,
+  relationshipAccessibleName,
   shortestPath,
 } from "../public/graph-model.js";
 import { newCase } from "../public/store.js";
@@ -60,6 +61,27 @@ test("node accessible name includes state without overclaiming", () => {
   assert.match(label, /Collection inconclusive/);
   assert.match(label, /2 evidence entries/);
   assert.doesNotMatch(label, /verified|confirmed|attributed/i);
+});
+
+test("relationship accessible name resolves endpoints, direction, and path state", () => {
+  const entities = [
+    { id: "a", value: "example.com" },
+    { id: "b", value: "192.0.2.1" },
+  ];
+  const directional = relationshipAccessibleName({
+    from: "a", to: "b", relationship_type: "resolves_to", status: "accepted",
+    rationale: "Observed DNS answer", citations: [{ id: "r1" }],
+  }, entities, { inPath: true });
+  const symmetric = relationshipAccessibleName({
+    from: "b", to: "a", relationship_type: "associated_with", status: "proposed",
+    rationale: "Network registration", citations: [],
+  }, entities);
+
+  assert.match(directional, /directional relationship from example\.com to 192\.0\.2\.1/);
+  assert.match(directional, /resolves to/);
+  assert.match(directional, /included in traced path/);
+  assert.match(symmetric, /symmetric relationship between 192\.0\.2\.1 and example\.com/);
+  assert.doesNotMatch(`${directional} ${symmetric}`, /verified|confirmed|attributed/i);
 });
 
 test("neighborhood and path traversal are undirected but preserve link ids", () => {

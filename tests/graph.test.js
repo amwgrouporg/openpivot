@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  applyNodeDrag,
   createGraph,
   edgePath,
+  graphEdgeLabelIds,
   graphLabelIds,
   graphListModel,
   mergeGraphPositions,
@@ -80,6 +82,22 @@ test("reduced-motion settling repaints after synchronous ticks", () => {
   assert.deepEqual(calls, [["alpha", 1], ["tick", 80], ["stop"], ["paint"]]);
 });
 
+test("reduced-motion dragging updates coordinates, repaints, and publishes on end", () => {
+  const node = { id: "a", x: 10, y: 20, fx: null, fy: null };
+  const calls = [];
+  const options = {
+    reducedMotion: true,
+    paint: () => calls.push(["paint", node.x, node.y]),
+    publish: () => calls.push(["publish", node.x, node.y]),
+  };
+
+  applyNodeDrag(node, { x: 30, y: 40 }, options);
+  applyNodeDrag(node, { x: 50, y: 60 }, { ...options, ending: true });
+
+  assert.deepEqual(node, { id: "a", x: 50, y: 60, fx: null, fy: null });
+  assert.deepEqual(calls, [["paint", 30, 40], ["paint", 50, 60], ["publish", 50, 60]]);
+});
+
 test("renderer label modes respect the selected entity and graph density", () => {
   const nodes = [
     { id: "ent_1" }, { id: "ent_2" }, { id: "ent_3" },
@@ -94,6 +112,24 @@ test("renderer label modes respect the selected entity and graph density", () =>
   assert.deepEqual(
     [...graphLabelIds(veryDenseNodes, links, { requested: "auto", selectedId: "ent_1", pathNodeIds: ["ent_8"] })].sort(),
     ["ent_1", "ent_8"],
+  );
+});
+
+test("relationship label LOD follows density while retaining focus, hover, and path context", () => {
+  const links = [
+    { id: "ab", from: "a", to: "b" },
+    { id: "ac", from: "a", to: "c" },
+    { id: "bc", from: "b", to: "c" },
+    { id: "de", from: "d", to: "e" },
+  ];
+  const nodes = (count) => ["a", "b", "c", "d", "e", ...Array.from({ length: count - 5 }, (_, index) => `n${index}`)].map((id) => ({ id }));
+
+  assert.deepEqual([...graphEdgeLabelIds(nodes(59), links, { requested: "auto" })], ["ab", "ac", "bc", "de"]);
+  assert.deepEqual([...graphEdgeLabelIds(nodes(60), links, { requested: "auto", selectedId: "a" })], ["ab", "ac", "bc"]);
+  assert.deepEqual([...graphEdgeLabelIds(nodes(151), links, { requested: "auto", selectedId: "a" })], ["ab", "ac"]);
+  assert.deepEqual(
+    [...graphEdgeLabelIds(nodes(151), links, { requested: "auto", selectedId: "a", hoveredLinkId: "de", pathLinkIds: ["bc"] })],
+    ["bc", "de", "ab", "ac"],
   );
 });
 
@@ -114,6 +150,15 @@ test("selection-aware fit includes one-hop neighbors and excludes unrelated grap
 
 test("semantic edge geometry uses a quadratic curve offset", () => {
   assert.equal(edgePath({ source: { x: 0, y: 0 }, target: { x: 100, y: 0 }, curveOffset: 20 }), "M0,0 Q50,20 100,0");
+});
+
+test("reverse relationships retain distinct physical curves", () => {
+  const forward = edgePath({ from: "a", to: "b", source: { x: 0, y: 0 }, target: { x: 100, y: 0 }, curveOffset: -9 });
+  const reverse = edgePath({ from: "b", to: "a", source: { x: 100, y: 0 }, target: { x: 0, y: 0 }, curveOffset: 9 });
+
+  assert.notEqual(forward, reverse);
+  assert.match(forward, /Q50,-9/);
+  assert.match(reverse, /Q50,9/);
 });
 
 test("node states distinguish focus, neighbors, paths, and dimmed entities", () => {

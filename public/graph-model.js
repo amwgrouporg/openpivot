@@ -1,4 +1,4 @@
-import { collectionStatusLabel, relationshipTypeLabel } from "./ui/copy.js";
+import { collectionStatusLabel, relationshipStatusLabel, relationshipTypeLabel } from "./ui/copy.js";
 
 function buildAdjacency(links) {
   const adjacency = new Map();
@@ -51,6 +51,26 @@ export function nodeAccessibleName(node) {
     countLabel(metadata.relationshipCount ?? 0, "relationship", "relationships"),
   ];
   if (node?.inPath) parts.push("included in traced path");
+  return parts.join("; ");
+}
+
+export function relationshipAccessibleName(link, entities = [], { inPath = false } = {}) {
+  const entityMap = entities instanceof Map ? entities : new Map((entities ?? []).map((entity) => [entity.id, entity]));
+  const fromId = typeof link?.from === "object" ? link.from.id : link?.from ?? link?.source?.id;
+  const toId = typeof link?.to === "object" ? link.to.id : link?.to ?? link?.target?.id;
+  const fromValue = entityMap.get(fromId)?.value ?? link?.source?.value ?? fromId ?? "unknown source";
+  const toValue = entityMap.get(toId)?.value ?? link?.target?.value ?? toId ?? "unknown target";
+  const presentation = edgePresentation(link);
+  const relationship = presentation.directional
+    ? `directional relationship from ${fromValue} to ${toValue}`
+    : `symmetric relationship between ${fromValue} and ${toValue}`;
+  const parts = [
+    relationshipStatusLabel(link?.status),
+    relationship,
+    presentation.label,
+    link?.rationale || "No rationale recorded",
+  ];
+  if (inPath) parts.push("included in traced path");
   return parts.join("; ");
 }
 

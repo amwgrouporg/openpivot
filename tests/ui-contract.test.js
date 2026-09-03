@@ -186,6 +186,23 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   assert.doesNotMatch(rendered.contentHtml, /disabled[^>]*data-view-action/);
 });
 
+test("graph text alternative names both relationship endpoints and path membership", () => {
+  const caseData = newCase("Graph alternative");
+  caseData.entities = [
+    { id: "a", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-03T10:00:00Z" },
+    { id: "b", type: "ip", value: "192.0.2.1", notes: "", added_by: "agent", added_at: "2026-09-03T10:01:00Z" },
+  ];
+  caseData.links = [{
+    id: "ab", from: "a", to: "b", relationship_type: "resolves_to", rationale: "Observed DNS answer",
+    asserted_by: "agent", status: "accepted", at: "2026-09-03T10:02:00Z", citations: [],
+  }];
+
+  const html = renderEntities({ caseData, selected: caseData.entities[0], pathState: { path: { nodeIds: ["a", "b"], linkIds: ["ab"] } } }).contentHtml;
+
+  assert.match(html, /data-graph-semantic[\s\S]*directional relationship from example\.com to 192\.0\.2\.1/);
+  assert.match(html, /data-graph-semantic[\s\S]*included in traced path/);
+});
+
 test("entity workbench exposes persistent restoration for dismissed candidates", () => {
   const caseData = newCase("Dismissed");
   const selected = { id: "ent_1", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" };

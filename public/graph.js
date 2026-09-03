@@ -7,9 +7,10 @@ import {
   layoutTargets,
   neighborhoodIds,
   nodeAccessibleName,
+  relationshipAccessibleName,
 } from "./graph-model.js";
 import { ENTITY_GLYPHS } from "./ui/components.js";
-import { relationshipStatusLabel, relationshipTypeLabel } from "./ui/copy.js";
+import { relationshipTypeLabel } from "./ui/copy.js";
 
 const COLORS = { domain: "#6ea8fe", ip: "#f2bd4a", url: "#59d48b", org: "#bd91ff", document: "#9aa7b7", claim: "#ff7b72" };
 const EDGE_COLORS = { accepted: "#78a9d4", proposed: "#e6b85c", rejected: "#e77a73" };
@@ -38,6 +39,13 @@ function edgeDomId(id) {
   return `graph-edge-${String(id).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
+function directedCurveOffset(link) {
+  const offset = Number(link?.curveOffset) || 0;
+  const from = link?.from ?? link?.source?.id;
+  const to = link?.to ?? link?.target?.id;
+  return from != null && to != null && String(from).localeCompare(String(to)) > 0 ? -offset : offset;
+}
+
 export function mergeGraphPositions(current, visible, { replace = false } = {}) {
   return replace ? { ...visible } : { ...(current ?? {}), ...(visible ?? {}) };
 }
@@ -45,6 +53,22 @@ export function mergeGraphPositions(current, visible, { replace = false } = {}) 
 export function settleImmediately(simulation, paint) {
   simulation.alpha(1).tick(80).stop();
   paint();
+}
+
+export function applyNodeDrag(item, event, {
+  reducedMotion = false,
+  paint = () => {},
+  ending = false,
+  fixedPosition = null,
+  publish = () => {},
+} = {}) {
+  item.x = event.x;
+  item.y = event.y;
+  item.fx = ending ? fixedPosition?.x ?? null : event.x;
+  item.fy = ending ? fixedPosition?.y ?? null : event.y;
+  if (reducedMotion) paint();
+  if (ending) publish();
+  return item;
 }
 
 export function graphListModel(caseData, filters = {}) {
@@ -67,6 +91,30 @@ export function graphLabelIds(nodes, links, { requested = "auto", selectedId = n
   return ids;
 }
 
+export function graphEdgeLabelIds(nodes, links, {
+  requested = "auto",
+  selectedId = null,
+  hoveredNodeId = null,
+  selectedLinkId = null,
+  hoveredLinkId = null,
+  pathLinkIds = [],
+} = {}) {
+  const mode = labelModeForCount((nodes ?? []).length, requested);
+  if (mode === "all") return new Set((links ?? []).map((link) => link.id));
+  const ids = new Set(pathLinkIds ?? []);
+  if (selectedLinkId) ids.add(selectedLinkId);
+  if (hoveredLinkId) ids.add(hoveredLinkId);
+  const focusId = hoveredNodeId ?? selectedId;
+  if (!focusId) return ids;
+  if (mode === "focus") {
+    for (const link of links ?? []) if (link.from === focusId || link.to === focusId) ids.add(link.id);
+    return ids;
+  }
+  const neighbors = neighborhoodIds(links, focusId, 1);
+  for (const link of links ?? []) if (neighbors.has(link.from) && neighbors.has(link.to)) ids.add(link.id);
+  return ids;
+}
+
 export function nodesForFit(nodes, selectedId = null, links = []) {
   if (!selectedId) return [...(nodes ?? [])];
   const ids = neighborhoodIds(links, selectedId, 1);
@@ -83,7 +131,7 @@ export function edgePath(link) {
   const dx = targetX - sourceX;
   const dy = targetY - sourceY;
   const distance = Math.hypot(dx, dy) || 1;
-  const offset = Number(link?.curveOffset) || 0;
+  const offset = directedCurveOffset(link);
   const controlX = finite((sourceX + targetX) / 2 - dy / distance * offset);
   const controlY = finite((sourceY + targetY) / 2 + dx / distance * offset);
   return `M${sourceX},${sourceY} Q${controlX},${controlY} ${targetX},${targetY}`;
@@ -99,7 +147,7 @@ function edgeMidpoint(link) {
   const dx = targetX - sourceX;
   const dy = targetY - sourceY;
   const distance = Math.hypot(dx, dy) || 1;
-  const offset = Number(link?.curveOffset) || 0;
+  const offset = directedCurveOffset(link);
   const controlX = (sourceX + targetX) / 2 - dy / distance * offset;
   const controlY = (sourceY + targetY) / 2 + dx / distance * offset;
   return {
@@ -312,7 +360,7 @@ export function createGraph(svgEl, options = {}) {
         ? "Hover or focus an entity or relationship for details."
         : kind === "entity"
           ? nodeAccessibleName({ ...item, inPath: pathNodeIdsRef.has(item.id) })
-          : `${relationshipStatusLabel(item.status)}; ${edgePresentation(item).label}; ${item.rationale || "No rationale recorded"}`;
+          : relationshipAccessibleName(item, nodesRef, { inPath: pathLinkIdsRef.has(item.id) });
     }
     if (kind === "entity") onHoverEntity(item ?? null);
     if (kind === "link") onHoverLink(item ?? null);
@@ -330,6 +378,14 @@ export function createGraph(svgEl, options = {}) {
       allNodesRef.select("rect.node-label-backing").attr("display", (item) => labelIdsRef.has(item.id) ? null : "none");
     }
     if (allLinksRef) {
+      const edgeLabelIds = graphEdgeLabelIds(nodesRef, activeLayoutLinks, {
+        requested: requestedLabels,
+        selectedId: selectedEntityId,
+        hoveredNodeId: hoveredEntityId,
+        selectedLinkId,
+        hoveredLinkId,
+        pathLinkIds: pathLinkIdsRef,
+      });
       allLinksRef.attr("class", (item) => {
         const classes = ["graph-edge"];
         if (item.id === selectedLinkId) classes.push("is-selected");
@@ -339,6 +395,8 @@ export function createGraph(svgEl, options = {}) {
         if ((selectedLinkId || hoveredLinkId) && item.id !== selectedLinkId && item.id !== hoveredLinkId && !pathLinkIdsRef.has(item.id)) classes.push("is-dimmed");
         return classes.join(" ");
       });
+      allLinksRef.select("text.edge-label").attr("display", (item) => edgeLabelIds.has(item.id) ? null : "none");
+      allLinksRef.select("text.edge-citation").attr("display", (item) => edgeLabelIds.has(item.id) ? null : "none");
     }
   }
 
@@ -402,7 +460,7 @@ export function createGraph(svgEl, options = {}) {
     linkEnter.append("text").attr("class", "edge-citation").attr("text-anchor", "middle");
     linkEnter.append("title");
     const allLinks = linkEnter.merge(link)
-      .attr("aria-label", (item) => `${relationshipStatusLabel(item.status)}; ${edgePresentation(item).label}; ${item.rationale || "No rationale recorded"}`);
+      .attr("aria-label", (item) => relationshipAccessibleName(item, nodes, { inPath: pathLinkIdsRef.has(item.id) }));
     allLinksRef = allLinks;
     allLinks.select("path.edge-line")
       .attr("id", (item) => edgeDomId(item.id))
@@ -413,15 +471,19 @@ export function createGraph(svgEl, options = {}) {
       .attr("href", (item) => `#${edgeDomId(item.id)}`)
       .text((item) => relationshipTypeLabel(item.relationship_type));
     allLinks.select("text.edge-citation").text((item) => sourceCountLabel(item));
-    allLinks.select("title").text((item) => `${relationshipStatusLabel(item.status)} · ${edgePresentation(item).label}: ${item.rationale || "No rationale recorded"}`);
+    allLinks.select("title").text((item) => relationshipAccessibleName(item, nodes, { inPath: pathLinkIdsRef.has(item.id) }));
 
     const node = nodeLayer.selectAll("g.graph-node").data(nodes, (item) => item.id);
     node.exit().remove();
     const enter = node.enter().append("g").attr("class", "graph-node").attr("tabindex", 0).attr("role", "button")
       .call(d3.drag()
         .on("start", (event, item) => { if (!event.active && !reducedMotion) simulation.alphaTarget(0.3).restart(); item.fx = item.x; item.fy = item.y; })
-        .on("drag", (event, item) => { item.fx = event.x; item.fy = event.y; })
-        .on("end", (event, item) => { if (!event.active) simulation.alphaTarget(0); item.x = event.x; item.y = event.y; item.fx = activeLayout === "radial" && item.id === activeLayoutSelectedId ? width / 2 : null; item.fy = activeLayout === "radial" && item.id === activeLayoutSelectedId ? height / 2 : null; publishPositions(); }))
+        .on("drag", (event, item) => { applyNodeDrag(item, event, { reducedMotion, paint: paintNodes }); })
+        .on("end", (event, item) => {
+          if (!event.active) simulation.alphaTarget(0);
+          const fixedPosition = activeLayout === "radial" && item.id === activeLayoutSelectedId ? { x: width / 2, y: height / 2 } : null;
+          applyNodeDrag(item, event, { reducedMotion, paint: paintNodes, ending: true, fixedPosition, publish: publishPositions });
+        }))
       .on("click", (event, item) => { event.stopPropagation(); selectedEntityId = item.id; labelIdsRef = graphLabelIds(nodesRef, activeLayoutLinks, { requested: requestedLabels, selectedId: selectedEntityId, pathNodeIds: pathNodeIdsRef }); applyPresentation(); onSelectEntity(item.id); })
       .on("keydown", (event, item) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectedEntityId = item.id; labelIdsRef = graphLabelIds(nodesRef, activeLayoutLinks, { requested: requestedLabels, selectedId: selectedEntityId, pathNodeIds: pathNodeIdsRef }); applyPresentation(); onSelectEntity(item.id); } })
       .on("pointerenter", (_, item) => { hoveredEntityId = item.id; renderHoverStatus("entity", item); applyPresentation(); })
