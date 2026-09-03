@@ -48,6 +48,9 @@ A transport failure, timeout, rate limit, missing key or parse error is `status:
 second source (crt.sh and Cert Spotter, Wayback CDX and the availability API, rdap.org and
 the IANA bootstrap), the fallback is automatic and the envelope says which one answered.
 
+Pages are served with a Content-Security-Policy that permits only same-origin scripts and
+connections, refuses framing, and sends no referrer to the sites an investigator opens from the board.
+
 ## WebMCP tools
 
 Always registered:
@@ -92,7 +95,7 @@ includes `localhost`.
 npm install
 cp .dev.vars.example .dev.vars      # optional keys: BRAVE_API_KEY, IPINFO_TOKEN, URLSCAN_API_KEY
 npm run dev                         # http://localhost:8787
-npm test                            # node --test
+npm test                            # node --test; the extraction tests start a local workerd through wrangler
 npm run deploy                      # wrangler deploy; set secrets with `wrangler secret put`
 ```
 

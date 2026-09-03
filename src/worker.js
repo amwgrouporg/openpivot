@@ -4,6 +4,7 @@
 // AI-BRAIN: the model on the other side of WebMCP decides which pivot to run and what
 // a result means. This Worker is deterministic sensors only. It never interprets.
 // REDTEAM: gpt-5.6-sol 2026-09-02 (docs/REDTEAM_gpt56sol_20260902.md; findings 1-4, 6-25 fixed or bounded)
+// REDTEAM: fable-5 2026-09-03 (docs/REDTEAM_fable5_20260903.md; findings 1-5 fixed, 6 open pending a ChatGPT-browser check)
 import { ok, indeterminate, jsonResponse } from "./envelope.js";
 import { normalizeHostname, normalizeIp, parseHttpUrl, clampInt, shortText } from "./validate.js";
 import { dnsSensor, ptrSensor } from "./sensors/dns.js";
@@ -16,6 +17,7 @@ import { searchSensor } from "./sensors/search.js";
 import { wikidataSensor } from "./sensors/wikidata.js";
 import { extractSensor, assertResolvesPublic } from "./sensors/extract.js";
 import { buildQueries } from "./queries.js";
+import { withSecurityHeaders } from "./headers.js";
 export { Limiter } from "./limiter_do.js";
 
 const SENSORS = ["dns", "ptr", "rdap", "certs", "wayback", "archive", "urlscan", "ip", "search", "wikidata", "extract", "queries"];
@@ -157,6 +159,12 @@ export default {
         return jsonResponse(indeterminate("api", null, `worker error: ${e?.message ?? e}`), { status: 500 });
       }
     }
-    return env.ASSETS.fetch(request);
+    // Every request passes through here (run_worker_first), so an asset-layer fault must be
+    // answered like any other failure, not thrown out of the Worker as a bare exception.
+    try {
+      return withSecurityHeaders(await env.ASSETS.fetch(request));
+    } catch (e) {
+      return new Response(`asset unavailable: ${e?.message ?? e}`, { status: 500, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
+    }
   },
 };

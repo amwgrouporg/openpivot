@@ -39,7 +39,8 @@ export async function fetchPublic(url, init, fetcher) {
 }
 
 const SKIP = "script,style,noscript,template,svg,iframe,canvas,object";
-const BLOCK = "p,div,br,li,ul,ol,h1,h2,h3,h4,h5,h6,tr,section,article,header,footer,blockquote,pre,table,nav,aside,dd,dt,figcaption";
+const BLOCK = "p,div,li,ul,ol,h1,h2,h3,h4,h5,h6,tr,section,article,header,footer,blockquote,pre,table,nav,aside,dd,dt,figcaption";
+const VOID_BREAK = "br"; // void element: a line break at its start tag only, there is no end tag to hook
 const TEXT_CAP = 20000;
 const LINK_CAP = 100;
 
@@ -75,7 +76,8 @@ export async function extractFromHtml(html, baseUrl) {
         } catch { /* unresolvable href: not a link */ }
       },
     })
-    .on(BLOCK, { element() { text += "\n"; } })
+    .on(VOID_BREAK, { element() { text += "\n"; } })
+    .on(BLOCK, { element(e) { text += "\n"; e.onEndTag(() => { text += "\n"; }); } })
     .on("body", { text(t) { if (skip === 0 && !inTitle) text += t.text; } });
   await rewriter.transform(new Response(html)).arrayBuffer();
   const collapsed = collapseWhitespace(text);
@@ -128,6 +130,11 @@ export async function extractSensor(url, fetcher = fetchWithTimeout, selfOrigin 
     const t = collapseWhitespace(body.text);
     return ok("extract", sourceUrl, { ...base, binary: false, title: null, description: null, text: t.slice(0, TEXT_CAP), text_truncated: t.length > TEXT_CAP || body.truncated, links: [] });
   }
-  const parsed = await extractFromHtml(body.text, finalUrl);
+  let parsed;
+  try {
+    parsed = await extractFromHtml(body.text, finalUrl);
+  } catch (e) {
+    return indeterminate("extract", sourceUrl, `parse: ${e.message}`, base);
+  }
   return ok("extract", sourceUrl, { ...base, binary: false, ...parsed, text_truncated: parsed.text_truncated || body.truncated });
 }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeHostname, normalizeIp, parseHttpUrl, isPrivateIPv4, clampInt, shortText } from "../src/validate.js";
+import { normalizeHostname, normalizeIp, parseHttpUrl, isPrivateIPv4, isPrivateIPv6, isPrivateIp, ipv6Groups, clampInt, shortText } from "../src/validate.js";
 import { candidatesFrom, newCase } from "../public/store.js";
 
 test("hostnames normalise and reject junk", () => {
@@ -55,4 +55,43 @@ test("candidate generation excludes selectors the board cannot add", () => {
   const envelope = { sensor: "certs", data: { distinct_names: ["www.example.com", "user@example.com", "not a host"] } };
 
   assert.deepEqual(candidatesFrom(caseData, entity, envelope), [{ type: "domain", value: "www.example.com", why: "name on a certificate" }]);
+});
+
+test("IPv6 special-use ranges are refused by prefix bits, not string prefix", () => {
+  const refused = [
+    "fe80::1", "fe90::1", "febf::1",            // link-local fe80::/10, not just the "fe80" spelling
+    "fec0::1",                                   // site-local fec0::/10
+    "fc00::1", "fd12::1",                        // unique local fc00::/7
+    "ff02::1",                                   // multicast ff00::/8
+    "::1", "::", "0:0:0:0:0:0:0:1", "0000:0000:0000:0000:0000:0000:0000:0000",
+    "::ffff:c0a8:101",                           // IPv4-mapped in hex form
+    "2002:c0a8:101::1",                          // 6to4 embedding 192.168.1.1
+    "64:ff9b::7f00:1",                           // NAT64 embedding 127.0.0.1
+  ];
+  for (const ip of refused) assert.equal(isPrivateIPv6(ip), true, ip);
+  const allowed = ["2606:4700::1111", "2001:4860:4860::8888", "fe7f::1", "2002:808:808::1", "64:ff9b::808:808"];
+  for (const ip of allowed) assert.equal(isPrivateIPv6(ip), false, ip);
+  assert.equal(isPrivateIp("fe90::1"), true);
+});
+
+test("link-local and site-local IPv6 literals are refused as fetch targets", () => {
+  assert.equal(parseHttpUrl("http://[fe90::1]/"), null);
+  assert.equal(parseHttpUrl("http://[febf::1]/admin"), null);
+  assert.equal(parseHttpUrl("http://[fec0::1]/"), null);
+  assert.equal(parseHttpUrl("http://[2002:c0a8:101::1]/"), null);
+  assert.equal(parseHttpUrl("http://[2606:4700::1111]/").href, "http://[2606:4700::1111]/");
+});
+
+test("unparseable IPv6 text is not proven public, so it is refused", () => {
+  assert.equal(isPrivateIPv6("not-an-ip"), true);
+  assert.equal(isPrivateIPv6("1:2:3:4:5:6:7:8:9"), true);
+  assert.equal(isPrivateIPv6("1::2::3"), true);
+});
+
+test("an embedded dotted quad is valid only as the final group of the whole address", () => {
+  assert.equal(ipv6Groups("1.2.3.4::"), null);
+  assert.equal(ipv6Groups("1:2:1.2.3.4::"), null);
+  assert.equal(isPrivateIPv6("1:2:1.2.3.4::"), true);
+  assert.deepEqual(ipv6Groups("::ffff:1.2.3.4"), [0, 0, 0, 0, 0, 0xffff, 0x0102, 0x0304]);
+  assert.deepEqual(ipv6Groups("1:2:3:4:5:6:1.2.3.4"), [1, 2, 3, 4, 5, 6, 0x0102, 0x0304]);
 });

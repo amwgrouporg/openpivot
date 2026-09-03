@@ -54,9 +54,55 @@ export function isPrivateIPv4(ip) {
   );
 }
 
+// Parses an IPv6 literal into eight 16-bit groups. Handles "::" compression and an
+// embedded dotted-quad tail. Returns null when the text is not an IPv6 address.
+export function ipv6Groups(ip) {
+  if (typeof ip !== "string") return null;
+  let s = ip.trim().toLowerCase();
+  if (s.startsWith("[") && s.endsWith("]")) s = s.slice(1, -1);
+  const halves = s.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  // A dotted quad may stand only where the last two groups of the whole address go: at the
+  // end of the tail, or at the end of the head when no "::" follows to fill in after it.
+  const end = tail.length ? tail : halves.length === 2 ? null : head;
+  const last = end?.at(-1);
+  if (last && last.includes(".")) {
+    if (!IPV4_RE.test(last)) return null;
+    const [a, b, c, d] = last.split(".").map(Number);
+    end.splice(-1, 1, ((a << 8) | b).toString(16), ((c << 8) | d).toString(16));
+  }
+  const groups = [...head, ...tail];
+  if (groups.some((g) => !/^[0-9a-f]{1,4}$/.test(g))) return null;
+  if (halves.length === 2) {
+    const missing = 8 - groups.length;
+    if (missing < 1) return null;
+    return [...head, ...Array(missing).fill("0"), ...tail].map((g) => parseInt(g, 16));
+  }
+  return groups.length === 8 ? groups.map((g) => parseInt(g, 16)) : null;
+}
+
+// Special-use IPv6 the Worker must never fetch, decided on prefix bits. Text that does
+// not parse as IPv6 is refused too: an address that cannot be read is not proven public.
 export function isPrivateIPv6(ip) {
-  const s = ip.toLowerCase();
-  return s === "::1" || s === "::" || s.startsWith("fc") || s.startsWith("fd") || s.startsWith("fe80") || s.startsWith("::ffff:");
+  const g = ipv6Groups(ip);
+  if (!g) return true;
+  const [h0, h1, h2, h3, h4, h5, h6, h7] = g;
+  const embeddedV4 = (hi, lo) => `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+  if (h0 === 0 && h1 === 0 && h2 === 0 && h3 === 0 && h4 === 0 && (h5 === 0 || h5 === 0xffff)) return true; // ::/96 (unspecified, loopback, IPv4-compatible) and ::ffff:0:0/96 (IPv4-mapped)
+  if (h0 === 0x64 && h1 === 0xff9b) {
+    if (h2 === 0 && h3 === 0 && h4 === 0 && h5 === 0) return isPrivateIPv4(embeddedV4(h6, h7)); // 64:ff9b::/96 NAT64 well-known prefix
+    if (h2 === 1) return true; // 64:ff9b:1::/48 local-use translation
+  }
+  if (h0 === 0x2002) return isPrivateIPv4(embeddedV4(h1, h2)); // 2002::/16 6to4
+  if ((h0 & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
+  if ((h0 & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((h0 & 0xffc0) === 0xfec0) return true; // fec0::/10 site-local (deprecated)
+  if ((h0 & 0xff00) === 0xff00) return true; // ff00::/8 multicast
+  if (h0 === 0x2001 && h1 === 0x0db8) return true; // 2001:db8::/32 documentation
+  if (h0 === 0x0100 && h1 === 0 && h2 === 0 && h3 === 0) return true; // 100::/64 discard-only
+  return false;
 }
 
 const BLOCKED_HOST_SUFFIXES = [".local", ".internal", ".localhost", ".home", ".lan", ".corp", ".intranet"];

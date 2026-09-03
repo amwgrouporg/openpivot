@@ -1,0 +1,5 @@
+# Minimal config for the test-only extraction harness. Kept separate from the project
+# wrangler.toml so the harness does not inherit the Limiter Durable Object binding.
+name = "openpivot-extract-harness"
+main = "extract_harness.js"
+compatibility_date = "2026-08-01"

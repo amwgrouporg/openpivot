@@ -6,6 +6,9 @@ compatibility_date = "2026-08-01"
 directory = "./public"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+# Every request passes through the Worker so the security headers in src/headers.js reach
+# the board page and its assets too; by default matched files would be answered before it.
+run_worker_first = true
 
 [observability]
 enabled = true

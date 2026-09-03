@@ -89,4 +89,5 @@ extraction. Case state lives in the browser; nothing is stored server-side.
 - [ ] DevPost: register, create project, paste description, add live URL, repo URL, video URL
 - [ ] YouTube: upload the video as public, under the AMW Group channel
 - [ ] Test the live URL in the ChatGPT desktop browser (Site tools in the address bar)
+- [ ] In the ChatGPT desktop browser, open the console while the tools register and a pivot runs; confirm no Content-Security-Policy reports (red-team finding 37)
 - [ ] Confirm the repo shows the MIT licence at the top and dated commits inside the window

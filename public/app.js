@@ -29,7 +29,7 @@ let graph = null;
 let toolset = null;
 
 const ui = {
-  view: caseData.entities.length ? "overview" : "overview",
+  view: "overview",
   selected: caseData.ui?.selected_entity_id ?? null,
   activeRun: null,
   candidates: new Map(),
@@ -361,7 +361,7 @@ function render(referenceNow = new Date().toISOString(), { graphDataChanged = tr
       graph ??= createGraph(svg, {
         onSelectEntity: (id) => handleGraphEntitySelection(id),
         onSelectLink: (id) => { ui.view = "relationships"; ui.relationshipFilter = "all"; ui.focusRelationship = id; render(); },
-        onPositionsChange: (positions, options) => { actions.invalidateUndo(); caseData.ui.graph_positions = mergeGraphPositions(caseData.ui.graph_positions, positions, options); repository.save(caseData); },
+        onPositionsChange: (positions, options) => { caseData.ui.graph_positions = mergeGraphPositions(caseData.ui.graph_positions, positions, options); repository.save(caseData); },
         reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
       });
       const interaction = { selectedId: ui.selected, pathNodeIds: ui.path?.nodeIds ?? [], pathLinkIds: ui.path?.linkIds ?? [] };
