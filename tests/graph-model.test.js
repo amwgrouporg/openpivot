@@ -11,6 +11,7 @@ import {
   shortestPath,
 } from "../public/graph-model.js";
 import { newCase } from "../public/store.js";
+import { nextPathSelection } from "../public/ui/graph-controls.js";
 
 function fixtureCase() {
   const caseData = newCase("Graph analysis");
@@ -46,6 +47,14 @@ test("neighborhood and path traversal are undirected but preserve link ids", () 
   assert.deepEqual([...neighborhoodIds(links, "a", 1)].sort(), ["a", "b"]);
   assert.deepEqual([...neighborhoodIds(links, "a", 2)].sort(), ["a", "b", "c"]);
   assert.deepEqual(shortestPath(links, "a", "c"), { nodeIds: ["a", "b", "c"], linkIds: ["ab", "bc"] });
+});
+
+test("a third path selection starts a fresh transient path", () => {
+  const links = [{ id: "ab", from: "a", to: "b" }, { id: "bc", from: "b", to: "c" }];
+  const completed = nextPathSelection(nextPathSelection({ pathStartId: null, pathEndId: null }, "a", links), "c", links);
+  const restarted = nextPathSelection(completed, "b", links);
+
+  assert.deepEqual(restarted, { pathStartId: "b", pathEndId: null, path: null });
 });
 
 test("connected components retain isolated entities", () => {

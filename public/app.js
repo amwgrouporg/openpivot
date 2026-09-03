@@ -6,7 +6,7 @@ import { sensor } from "./api.js";
 import { getModelContext, createRegistry } from "./webmcp.js";
 import { createToolset } from "./tools.js";
 import { PIVOT_SPECS, runPivot } from "./runs.js";
-import { createGraph, mergeGraphPositions } from "./graph.js";
+import { createGraph, graphListModel, mergeGraphPositions } from "./graph.js";
 import { buildReviewQueue, candidateKey, dismissedCandidates, evidenceDraftFromReading, groupInvestigativeLeads, searchCase, visibleCandidates } from "./ui/view-models.js";
 import { escapeHtml, icon } from "./ui/components.js";
 import { renderShell } from "./ui/shell.js";
@@ -17,6 +17,8 @@ import { relationshipFocusFilter, renderRelationships } from "./ui/relationships
 import { renderEvidence } from "./ui/evidence.js";
 import { renderReport } from "./ui/report.js";
 import { renderSearchResults } from "./ui/search.js";
+import { graphPreferenceUpdate, nextPathSelection } from "./ui/graph-controls.js";
+import { shortestPath } from "./graph-model.js";
 
 const app = document.getElementById("app");
 const repository = createLocalCaseRepository(localStorage);
@@ -38,6 +40,10 @@ const ui = {
   evidenceDraft: null,
   relationshipFilter: "all",
   graphFilters: { status: "active", types: [], connected: false },
+  pathMode: false,
+  pathStartId: null,
+  pathEndId: null,
+  path: null,
   returnFocus: null,
   focusRelationship: null,
   skipFormRestore: false,
@@ -78,6 +84,33 @@ function persist() {
   caseData.ui.selected_entity_id = ui.selected;
   repository.save(caseData);
   render();
+}
+
+function graphFilterOptions(referenceNow = new Date().toISOString()) {
+  const status = ui.graphFilters.status;
+  const filters = status === "all" ? { includeRejected: true } : status === "active" ? {} : { statuses: [status] };
+  filters.types = ui.graphFilters.types;
+  if (ui.graphFilters.connected && ui.selected) filters.connectedTo = ui.selected;
+  filters.selectedId = ui.selected;
+  filters.hops = ui.graphFilters.connected ? 1 : caseData.ui.graph_hops;
+  filters.activityWindow = caseData.ui.graph_activity_window;
+  filters.now = referenceNow;
+  return filters;
+}
+
+function recomputePathForVisibleGraph(referenceNow = new Date().toISOString()) {
+  if (!ui.pathStartId || !ui.pathEndId) {
+    ui.path = null;
+    return;
+  }
+  ui.path = shortestPath(graphListModel(caseData, graphFilterOptions(referenceNow)).links, ui.pathStartId, ui.pathEndId);
+}
+
+function clearPath() {
+  ui.pathMode = false;
+  ui.pathStartId = null;
+  ui.pathEndId = null;
+  ui.path = null;
 }
 
 async function executeEntityPivot(entity, type, archive = false, actor = "human") {
@@ -154,11 +187,11 @@ function toastHtml() {
   return `<div class="toast"><span>${escapeHtml(ui.toast.message)}</span>${ui.toast.undo ? '<button class="button button--small button--ghost" type="button" data-action="undo-removal">Undo</button>' : ""}${ui.toast.restoreCandidateKey ? `<button class="button button--small button--ghost" type="button" data-action="restore-candidate" data-key="${escapeHtml(ui.toast.restoreCandidateKey)}">Restore</button>` : ""}<button class="button button--quiet icon-button" type="button" data-action="dismiss-toast" aria-label="Dismiss notification">${icon("close")}</button></div>`;
 }
 
-function activeContent(queue, webmcpState) {
+function activeContent(queue, webmcpState, referenceNow) {
   if (ui.view === "overview") return { contentHtml: renderOverview({ caseData, queue, webmcpState, leadGroups: groupInvestigativeLeads(caseData, ui.candidates), selectedLeadKeys: ui.selectedLeadKeys }), workbenchHtml: "" };
   if (ui.view === "entities") {
     const selected = ui.selected ? findEntity(caseData, ui.selected) : null;
-    return renderEntities({ caseData, selected, candidates: selected ? visibleCandidates(caseData, ui.candidates, selected.id) : [], dismissedCandidates: selected ? dismissedCandidates(caseData, ui.candidates, selected.id) : [], activeRun: ui.activeRun, graphFilters: ui.graphFilters });
+    return renderEntities({ caseData, selected, candidates: selected ? visibleCandidates(caseData, ui.candidates, selected.id) : [], dismissedCandidates: selected ? dismissedCandidates(caseData, ui.candidates, selected.id) : [], activeRun: ui.activeRun, graphFilters: ui.graphFilters, pathState: ui, referenceNow });
   }
   if (ui.view === "relationships") return { contentHtml: renderRelationships({ caseData, statusFilter: ui.relationshipFilter }), workbenchHtml: "" };
   if (ui.view === "evidence") return { contentHtml: renderEvidence({ caseData, draft: ui.evidenceDraft }), workbenchHtml: "" };
@@ -172,7 +205,8 @@ function render() {
   graph = null;
   const queue = buildReviewQueue(caseData, ui.candidates);
   const webmcpState = { available: Boolean(modelContext), toolNames: registry.names() };
-  const content = activeContent(queue, webmcpState);
+  const graphReferenceNow = new Date().toISOString();
+  const content = activeContent(queue, webmcpState, graphReferenceNow);
   const searchResults = searchCase(caseData, ui.searchQuery);
   const noticeHtml = ui.notice ? `<div class="notice">${icon("warning")}<span>${escapeHtml(ui.notice)}</span><button class="button button--quiet icon-button" type="button" data-action="dismiss-notice" aria-label="Dismiss error">${icon("close")}</button></div>` : "";
   app.innerHTML = renderShell({
@@ -206,17 +240,27 @@ function render() {
     const svg = document.getElementById("graph");
     if (svg) {
       graph = createGraph(svg, {
-        onSelectEntity: (id) => { ui.selected = id; caseData.ui.selected_entity_id = id; repository.save(caseData); render(); focusSelector("[data-workbench-title]"); },
+        onSelectEntity: (id) => {
+          if (ui.pathMode) {
+            const next = nextPathSelection({ pathStartId: ui.pathStartId, pathEndId: ui.pathEndId, path: ui.path }, id, graphListModel(caseData, graphFilterOptions(graphReferenceNow)).links);
+            ui.pathStartId = next.pathStartId;
+            ui.pathEndId = next.pathEndId;
+            ui.path = next.path;
+            render();
+            return;
+          }
+          ui.selected = id;
+          caseData.ui.selected_entity_id = id;
+          repository.save(caseData);
+          render();
+          focusSelector("[data-workbench-title]");
+        },
         onSelectLink: (id) => { ui.view = "relationships"; ui.relationshipFilter = "all"; ui.focusRelationship = id; render(); },
         onPositionsChange: (positions, options) => { actions.invalidateUndo(); caseData.ui.graph_positions = mergeGraphPositions(caseData.ui.graph_positions, positions, options); repository.save(caseData); },
         reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
       });
       graph.select(ui.selected);
-      const status = ui.graphFilters.status;
-      const filters = status === "all" ? { includeRejected: true } : status === "active" ? {} : { statuses: [status] };
-      filters.types = ui.graphFilters.types;
-      if (ui.graphFilters.connected && ui.selected) filters.connectedTo = ui.selected;
-      graph.update(caseData, filters);
+      graph.update(caseData, graphFilterOptions(graphReferenceNow));
     }
   }
 }
@@ -324,8 +368,22 @@ app.addEventListener("change", (event) => {
   }
   if (event.target.dataset.control === "graph-status-filter") {
     ui.graphFilters.status = event.target.value;
+    recomputePathForVisibleGraph();
     render();
     focusSelector('[data-control="graph-status-filter"]');
+  }
+  if (event.target.dataset.control === "graph-activity-window") {
+    graphPreferenceUpdate(caseData, "graph_activity_window", event.target.value);
+    recomputePathForVisibleGraph();
+    repository.save(caseData);
+    render();
+    focusSelector('[data-control="graph-activity-window"]');
+  }
+  if (event.target.dataset.control === "graph-label-mode") {
+    graphPreferenceUpdate(caseData, "graph_labels", event.target.value);
+    repository.save(caseData);
+    render();
+    focusSelector('[data-control="graph-label-mode"]');
   }
   if (event.target.dataset.leadKey) {
     if (event.target.checked) ui.selectedLeadKeys.add(event.target.dataset.leadKey);
@@ -414,9 +472,33 @@ app.addEventListener("click", async (event) => {
   const graphAction = event.target.closest("[data-graph-action]")?.dataset.graphAction;
   if (graphAction) {
     if (graphAction === "fit") graph?.fit();
+    if (graphAction === "fit-selection") graph?.fit();
     if (graphAction === "in") graph?.zoom(1.25);
     if (graphAction === "out") graph?.zoom(0.8);
     if (graphAction === "reset") graph?.resetLayout?.();
+    if (graphAction === "trace-path") {
+      ui.pathMode = true;
+      ui.pathStartId = null;
+      ui.pathEndId = null;
+      ui.path = null;
+      render();
+      focusSelector('[data-graph-action="trace-path"]');
+    }
+    if (graphAction === "clear-path") {
+      clearPath();
+      render();
+      focusSelector('[data-graph-action="trace-path"]');
+    }
+    return;
+  }
+  const graphPreference = event.target.closest("[data-graph-preference]");
+  if (graphPreference) {
+    const { graphPreference: name, value } = graphPreference.dataset;
+    graphPreferenceUpdate(caseData, name, value);
+    recomputePathForVisibleGraph();
+    repository.save(caseData);
+    render();
+    focusSelector(`[data-graph-preference="${name}"][data-value="${value}"]`);
     return;
   }
   const graphType = event.target.closest("[data-graph-type]")?.dataset.graphType;
@@ -424,12 +506,14 @@ app.addEventListener("click", async (event) => {
     const types = new Set(ui.graphFilters.types);
     if (types.has(graphType)) types.delete(graphType); else types.add(graphType);
     ui.graphFilters.types = [...types];
+    recomputePathForVisibleGraph();
     render();
     focusSelector(`[data-graph-type="${CSS.escape(graphType)}"]`);
     return;
   }
   if (event.target.closest("[data-graph-connected]")) {
     ui.graphFilters.connected = !ui.graphFilters.connected;
+    recomputePathForVisibleGraph();
     render();
     focusSelector("[data-graph-connected]");
     return;

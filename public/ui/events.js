@@ -167,6 +167,10 @@ export function resetTransientUi(ui) {
   ui.modal = null;
   ui.returnFocus = null;
   ui.focusRelationship = null;
+  ui.pathMode = false;
+  ui.pathStartId = null;
+  ui.pathEndId = null;
+  ui.path = null;
   ui.skipFormRestore = true;
   if ("searchQuery" in ui) ui.searchQuery = "";
   if (ui.selectedLeadKeys?.clear) ui.selectedLeadKeys.clear();

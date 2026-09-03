@@ -2,6 +2,7 @@ import { actorBadge, escapeHtml, formatTime, icon, safeLink, sectionHeader, shor
 import { graphListModel } from "../graph.js";
 import { candidateKey } from "./view-models.js";
 import { relationshipStatusLabel, relationshipTypeLabel } from "./copy.js";
+import { renderGraphControls } from "./graph-controls.js";
 
 const ENTITY_TYPES = ["domain", "ip", "url", "org", "document", "claim"];
 const PIVOT_LABELS = {
@@ -70,17 +71,23 @@ function workbench({ caseData, selected, candidates, dismissedCandidates: dismis
 }
 
 export function renderEntities(model) {
-  const { caseData, selected, candidates = [], dismissedCandidates = [], activeRun = null, graphFilters = {} } = model;
+  const { caseData, selected, candidates = [], dismissedCandidates = [], activeRun = null, graphFilters = {}, pathState = {}, referenceNow } = model;
   const statusValue = graphFilters.status ?? "active";
   const selectedTypes = new Set(graphFilters.types ?? []);
+  const preferences = caseData.ui ?? { graph_layout: "force", graph_hops: "all", graph_activity_window: "all", graph_labels: "auto" };
   const resolvedFilters = statusValue === "all" ? { includeRejected: true } : statusValue === "active" ? {} : { statuses: [statusValue] };
   resolvedFilters.types = [...selectedTypes];
   if (graphFilters.connected && selected) resolvedFilters.connectedTo = selected.id;
+  resolvedFilters.selectedId = selected?.id ?? null;
+  resolvedFilters.hops = graphFilters.connected ? 1 : preferences.graph_hops;
+  resolvedFilters.activityWindow = preferences.graph_activity_window;
+  resolvedFilters.now = referenceNow;
   const semanticGraph = graphListModel(caseData, resolvedFilters);
   const contentHtml = `<div class="entities-view">
-    <header class="page-header"><div><span class="eyebrow">Technical entities</span><h1>Investigation graph</h1><p>Inspect collected infrastructure, run source-specific pivots, and triage the leads surfaced by each collection result.</p></div><div class="page-actions"><label class="filter-control"><span>Relationships</span><select data-control="graph-status-filter"><option value="active"${statusValue === "active" ? " selected" : ""}>In case</option><option value="accepted"${statusValue === "accepted" ? " selected" : ""}>Accepted into case</option><option value="proposed"${statusValue === "proposed" ? " selected" : ""}>Pending review</option><option value="all"${statusValue === "all" ? " selected" : ""}>All</option></select></label><button class="button button--ghost" type="button" data-graph-action="fit">Fit graph</button><button class="button button--ghost" type="button" data-graph-action="reset">Reset layout</button></div></header>
+    <header class="page-header"><div><span class="eyebrow">Technical entities</span><h1>Investigation graph</h1><p>Inspect collected infrastructure, run source-specific pivots, and triage the leads surfaced by each collection result.</p></div><div class="page-actions"><label class="filter-control"><span>Relationships</span><select data-control="graph-status-filter"><option value="active"${statusValue === "active" ? " selected" : ""}>In case</option><option value="accepted"${statusValue === "accepted" ? " selected" : ""}>Accepted into case</option><option value="proposed"${statusValue === "proposed" ? " selected" : ""}>Pending review</option><option value="all"${statusValue === "all" ? " selected" : ""}>All</option></select></label></div></header>
     ${addEntityForm()}
     <div class="graph-filter-bar" aria-label="Graph filters"><span class="eyebrow">Entity types</span>${ENTITY_TYPES.map((type) => `<button class="filter-chip${selectedTypes.has(type) ? " is-active" : ""}" type="button" data-graph-type="${type}" aria-pressed="${selectedTypes.has(type)}">${typeBadge(type)}</button>`).join("")}<button class="filter-chip${graphFilters.connected ? " is-active" : ""}" type="button" data-graph-connected aria-pressed="${Boolean(graphFilters.connected)}"${selected ? "" : " disabled"}>Connected to selection</button></div>
+    ${renderGraphControls({ caseData, preferences, selectedId: selected?.id ?? null, pathMode: pathState.pathMode, pathStartId: pathState.pathStartId, pathEndId: pathState.pathEndId, path: pathState.path, density: semanticGraph.density })}
     <div class="entity-workspace">
       <section class="graph-card card"><div class="graph-toolbar"><span>${semanticGraph.nodes.length} entities · ${semanticGraph.links.length} relationships</span><div><button class="button button--small icon-button" type="button" data-graph-action="out" aria-label="Zoom out">−</button><button class="button button--small icon-button" type="button" data-graph-action="in" aria-label="Zoom in">+</button></div></div><svg id="graph" role="img" aria-label="Entity relationship graph"></svg><div class="graph-empty"${semanticGraph.nodes.length ? " hidden" : ""}>No entities match the current filters.</div><div class="sr-only" data-graph-semantic><h2>Graph text alternative</h2>${semanticGraph.nodes.map((entity) => `<button type="button" data-action="select-entity" data-id="${escapeHtml(entity.id)}">${escapeHtml(entity.type)}: ${escapeHtml(entity.value)}</button>`).join("")}${semanticGraph.links.map((link) => `<button type="button" data-action="open-relationship" data-id="${escapeHtml(link.id)}">${escapeHtml(relationshipStatusLabel(link.status))}; ${escapeHtml(relationshipTypeLabel(link.relationship_type))}: ${escapeHtml(link.rationale)}</button>`).join("")}</div></section>
       <section class="entity-browser card">${sectionHeader("Entities", caseData.entities.length)}${entityList(caseData, selected)}</section>

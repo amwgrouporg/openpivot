@@ -9,6 +9,7 @@ import { relationshipFocusFilter, renderRelationships } from "../public/ui/relat
 import { renderEvidence } from "../public/ui/evidence.js";
 import { renderReport } from "../public/ui/report.js";
 import { renderSearchResults } from "../public/ui/search.js";
+import { graphPreferenceUpdate, nextPathSelection, renderGraphControls, renderPathBreadcrumb } from "../public/ui/graph-controls.js";
 import { newCase } from "../public/store.js";
 
 test("safe links expose http destinations and neutralize executable protocols", () => {
@@ -96,6 +97,61 @@ test("empty overview provides one guided entity starting point", () => {
   assert.match(html, /name="value"/);
 });
 
+test("graph controls expose every analyst mode", () => {
+  const html = renderGraphControls({
+    preferences: { graph_layout: "force", graph_hops: "all", graph_activity_window: "all", graph_labels: "auto" },
+    selectedId: "a", pathMode: false, path: null, density: { message: "" },
+  });
+  for (const label of ["Relationship map", "Entity lanes", "Radial focus", "All entities", "1 hop", "2 hops", "Case activity", "Trace path", "Fit selection", "Graph legend"]) {
+    assert.match(html, new RegExp(label));
+  }
+  const withoutSelection = renderGraphControls({ preferences: {}, selectedId: null, pathMode: false, path: null, density: { message: "" } });
+  assert.match(withoutSelection, /data-value="radial"[^>]*disabled/);
+  assert.match(withoutSelection, /data-graph-action="fit-selection"[^>]*disabled/);
+  assert.equal(renderPathBreadcrumb(null, null), '<p class="graph-path-empty">No path is present in the current graph filters.</p>');
+});
+
+test("path breadcrumb names entities and relationship types", () => {
+  const caseData = newCase("Path breadcrumb");
+  caseData.entities = [
+    { id: "a", type: "domain", value: "example.com", notes: "", added_by: "human", added_at: "2026-09-03T10:00:00.000Z" },
+    { id: "b", type: "ip", value: "192.0.2.1", notes: "", added_by: "human", added_at: "2026-09-03T10:00:00.000Z" },
+  ];
+  caseData.links = [{ id: "ab", from: "a", to: "b", relationship_type: "resolves_to", rationale: "", asserted_by: "human", status: "accepted", at: "2026-09-03T10:00:00.000Z", citations: [] }];
+
+  const html = renderPathBreadcrumb(caseData, { nodeIds: ["a", "b"], linkIds: ["ab"] });
+
+  assert.match(html, /example\.com.*resolves to.*192\.0\.2\.1/);
+  assert.match(html, /Clear path/);
+});
+
+test("graph preference updates only one valid field", () => {
+  const caseData = newCase("Graph preferences");
+  const positions = { ...caseData.ui.graph_positions };
+
+  graphPreferenceUpdate(caseData, "graph_layout", "lanes");
+
+  assert.equal(caseData.ui.graph_layout, "lanes");
+  assert.deepEqual(caseData.ui.graph_positions, positions);
+  assert.throws(() => graphPreferenceUpdate(caseData, "graph_layout", "3d"), /invalid graph preference/);
+});
+
+test("path selection chooses start then end without mutating case data", () => {
+  const caseData = newCase("Path selection");
+  caseData.links = [
+    { id: "ab", from: "a", to: "b" },
+    { id: "bc", from: "b", to: "c" },
+  ];
+  const before = JSON.stringify(caseData);
+
+  const first = nextPathSelection({ pathStartId: null, pathEndId: null }, "a", caseData.links);
+  const second = nextPathSelection(first, "c", caseData.links);
+
+  assert.equal(first.pathStartId, "a");
+  assert.deepEqual(second.path.nodeIds, ["a", "b", "c"]);
+  assert.equal(JSON.stringify(caseData), before);
+});
+
 test("entity workbench shows sensor progress and keeps unrelated navigation available", () => {
   const caseData = newCase("Entity");
   const selected = { id: "ent_1", type: "domain", value: "example.com", notes: "Seed", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" };
@@ -109,6 +165,8 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   assert.match(rendered.contentHtml, /data-graph-type="domain"/);
   assert.match(rendered.contentHtml, /data-graph-connected/);
   assert.match(rendered.contentHtml, /data-graph-semantic/);
+  assert.match(rendered.contentHtml, /graph-control-deck/);
+  assert.match(rendered.contentHtml, /data-graph-preference="graph_layout"/);
   assert.match(rendered.workbenchHtml, /example\.com/);
   assert.match(rendered.workbenchHtml, /data-workbench-title[^>]*tabindex="-1"/);
   assert.match(rendered.workbenchHtml, /data-candidate-key="ent_1:domain:www\.example\.com"/);
@@ -356,12 +414,12 @@ test("case replacement clears transient UI and disables old undo", () => {
   caseData.entities.push({ id: "ent_old", type: "domain", value: "old.example", notes: "", added_by: "human", added_at: "2026-09-01T10:00:00.000Z" });
   const actions = createCaseActions({ getCase: () => caseData, persist() {}, setUi() {}, runEntityPivot: async () => ({}) });
   actions.removeEntity("ent_old");
-  const ui = { selected: "ent_old", activeRun: {}, evidenceDraft: {}, toast: { undo: true }, modal: {}, returnFocus: "button", focusRelationship: "lnk_1", skipFormRestore: false };
+  const ui = { selected: "ent_old", activeRun: {}, evidenceDraft: {}, toast: { undo: true }, modal: {}, returnFocus: "button", focusRelationship: "lnk_1", skipFormRestore: false, pathMode: true, pathStartId: "ent_old", pathEndId: "ent_new", path: { nodeIds: ["ent_old", "ent_new"], linkIds: ["lnk_1"] } };
 
   actions.invalidateUndo();
   caseData = newCase("Imported");
   resetTransientUi(ui);
 
   assert.throws(() => actions.undoRemoval(), /nothing to undo/i);
-  assert.deepEqual(ui, { selected: null, activeRun: null, evidenceDraft: null, toast: null, modal: null, returnFocus: null, focusRelationship: null, skipFormRestore: true });
+  assert.deepEqual(ui, { selected: null, activeRun: null, evidenceDraft: null, toast: null, modal: null, returnFocus: null, focusRelationship: null, skipFormRestore: true, pathMode: false, pathStartId: null, pathEndId: null, path: null });
 });
