@@ -2,10 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   connectedComponents,
+  edgePresentation,
   filterGraph,
   labelModeForCount,
   layoutTargets,
   neighborhoodIds,
+  nodeAccessibleName,
   nodeMetadata,
   parallelEdgeOffsets,
   shortestPath,
@@ -40,6 +42,24 @@ test("node metadata prioritizes inconclusive collection and counts evidence", ()
     collectionStatus: "indeterminate", evidenceCount: 1, relationshipCount: 2,
     lastCaseActivityAt: "2026-09-03T12:00:00Z",
   });
+});
+
+test("edge presentation distinguishes directional and symmetric types", () => {
+  assert.deepEqual(edgePresentation({
+    relationship_type: "resolves_to", status: "proposed", citations: [{ id: "r1" }],
+  }), { directional: true, marker: "arrow-proposed", pattern: "6 5", label: "resolves to · 1 source" });
+  assert.equal(edgePresentation({ relationship_type: "associated_with", status: "accepted", citations: [] }).directional, false);
+});
+
+test("node accessible name includes state without overclaiming", () => {
+  const label = nodeAccessibleName({
+    type: "domain", value: "example.com", added_by: "agent",
+    metadata: { collectionStatus: "indeterminate", evidenceCount: 2, relationshipCount: 3 },
+    inPath: true,
+  });
+  assert.match(label, /Collection inconclusive/);
+  assert.match(label, /2 evidence entries/);
+  assert.doesNotMatch(label, /verified|confirmed|attributed/i);
 });
 
 test("neighborhood and path traversal are undirected but preserve link ids", () => {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { actorBadge, safeLink, statusBadge, typeBadge } from "../public/ui/components.js";
+import { actorBadge, entityGlyph, safeLink, statusBadge, typeBadge } from "../public/ui/components.js";
 import { renderShell } from "../public/ui/shell.js";
 import { renderOverview } from "../public/ui/overview.js";
 import { renderEntities } from "../public/ui/entities.js";
@@ -28,6 +28,12 @@ test("badges always include readable status, actor, and entity text", () => {
   assert.match(actorBadge("agent"), />agent</);
   assert.match(actorBadge("human"), />investigator</);
   assert.match(typeBadge("domain"), />domain</);
+});
+
+test("graph entity glyphs are inline and type-specific", () => {
+  assert.match(entityGlyph("domain"), /node-glyph/);
+  assert.doesNotMatch(entityGlyph("domain"), /(?:href|src)=/);
+  assert.notEqual(entityGlyph("domain"), entityGlyph("ip"));
 });
 
 test("shell exposes five destinations and identifies the active view", () => {
@@ -165,6 +171,9 @@ test("entity workbench shows sensor progress and keeps unrelated navigation avai
   assert.match(rendered.contentHtml, /data-graph-type="domain"/);
   assert.match(rendered.contentHtml, /data-graph-connected/);
   assert.match(rendered.contentHtml, /data-graph-semantic/);
+  assert.match(rendered.contentHtml, /class="graph-minimap"[^>]*aria-hidden="true"/);
+  assert.match(rendered.contentHtml, /data-graph-hover-status[^>]*role="status"/);
+  assert.match(rendered.contentHtml, /data-graph-unavailable[^>]*hidden[^>]*>Interactive graph unavailable; use the graph text alternative below\./);
   assert.match(rendered.contentHtml, /data-graph-semantic[\s\S]*data-action="graph-select-entity"/);
   assert.match(rendered.contentHtml, /graph-control-deck/);
   assert.match(rendered.contentHtml, /data-graph-preference="graph_layout"/);

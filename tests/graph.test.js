@@ -1,6 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createGraph, graphLabelIds, graphListModel, mergeGraphPositions, nodesForFit, resetGraphLayoutNodes, settleImmediately } from "../public/graph.js";
+import {
+  createGraph,
+  edgePath,
+  graphLabelIds,
+  graphListModel,
+  mergeGraphPositions,
+  nodeStateClasses,
+  nodesForFit,
+  resetGraphLayoutNodes,
+  settleImmediately,
+} from "../public/graph.js";
 import { newCase } from "../public/store.js";
 
 function graphCase() {
@@ -79,17 +89,44 @@ test("renderer label modes respect the selected entity and graph density", () =>
   assert.deepEqual([...graphLabelIds(nodes, links, { requested: "focus", selectedId: "ent_1" })], ["ent_1"]);
   const denseNodes = Array.from({ length: 60 }, (_, index) => ({ id: `ent_${index}` }));
   assert.deepEqual([...graphLabelIds(denseNodes, links, { requested: "auto", selectedId: "ent_1" })].sort(), ["ent_1", "ent_2"]);
+
+  const veryDenseNodes = Array.from({ length: 151 }, (_, index) => ({ id: `ent_${index}` }));
+  assert.deepEqual(
+    [...graphLabelIds(veryDenseNodes, links, { requested: "auto", selectedId: "ent_1", pathNodeIds: ["ent_8"] })].sort(),
+    ["ent_1", "ent_8"],
+  );
 });
 
-test("selection-aware fit excludes unrelated graph nodes", () => {
+test("selection-aware fit includes one-hop neighbors and excludes unrelated graph nodes", () => {
   const nodes = [
     { id: "ent_1", x: 20, y: 20 },
     { id: "ent_2", x: 220, y: 220 },
     { id: "ent_3", x: 900, y: 900 },
   ];
+  const links = [{ from: "ent_1", to: "ent_2" }];
 
-  assert.deepEqual(nodesForFit(nodes, "ent_2"), [{ id: "ent_2", x: 220, y: 220 }]);
+  assert.deepEqual(nodesForFit(nodes, "ent_2", links), [
+    { id: "ent_1", x: 20, y: 20 },
+    { id: "ent_2", x: 220, y: 220 },
+  ]);
   assert.equal(typeof createGraph(null).fitSelection, "function");
+});
+
+test("semantic edge geometry uses a quadratic curve offset", () => {
+  assert.equal(edgePath({ source: { x: 0, y: 0 }, target: { x: 100, y: 0 }, curveOffset: 20 }), "M0,0 Q50,20 100,0");
+});
+
+test("node states distinguish focus, neighbors, paths, and dimmed entities", () => {
+  const context = {
+    selectedId: "a",
+    hoveredId: null,
+    neighborIds: new Set(["a", "b"]),
+    pathNodeIds: new Set(["c"]),
+  };
+  assert.match(nodeStateClasses("a", context), /is-selected/);
+  assert.match(nodeStateClasses("b", context), /is-neighbor/);
+  assert.match(nodeStateClasses("c", context), /is-path/);
+  assert.match(nodeStateClasses("d", context), /is-dimmed/);
 });
 
 test("reset reapplies active lanes and radial layout targets", () => {

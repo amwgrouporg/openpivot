@@ -23,6 +23,15 @@ const ICONS = {
   search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
 };
 
+export const ENTITY_GLYPHS = {
+  domain: "M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18M5 7h14M5 17h14",
+  ip: "M4 7h16v10H4zM8 12h.1M12 12h.1M16 12h.1",
+  url: "M9 15l6-6M7.5 17.5l-1 1a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0M16.5 6.5l1-1a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0",
+  org: "M4 20h16M6 20V9h12v11M9 12h2M13 12h2M9 16h2M13 16h2M8 9V5h8v4",
+  document: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5",
+  claim: "M5 5h14v11H9l-4 4zM9 9h6M9 12h4",
+};
+
 export function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 }
@@ -36,6 +45,11 @@ export function icon(name, label = "") {
   const body = ICONS[name] ?? ICONS.overview;
   const aria = label ? ` role="img" aria-label="${escapeHtml(label)}"` : ' aria-hidden="true"';
   return `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"${aria}>${body}</svg>`;
+}
+
+export function entityGlyph(type) {
+  const path = ENTITY_GLYPHS[type] ?? ENTITY_GLYPHS.document;
+  return `<path class="node-glyph" d="${path}" aria-hidden="true"></path>`;
 }
 
 export function safeLink(url, text) {

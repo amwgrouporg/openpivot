@@ -1,3 +1,5 @@
+import { collectionStatusLabel, relationshipTypeLabel } from "./ui/copy.js";
+
 function buildAdjacency(links) {
   const adjacency = new Map();
   for (const link of links ?? []) {
@@ -19,6 +21,38 @@ const ACTIVITY_WINDOWS = { "24h": 86_400_000, "7d": 604_800_000, "30d": 2_592_00
 const LANE_TYPES = ["domain", "url", "ip", "org", "document", "claim"];
 const RELATIONSHIP_TYPES = ["resolves_to", "uses_nameserver", "registered_through", "hosted_on", "redirects_to", "references", "observed_with", "associated_with", "custom"];
 const SYMMETRIC_TYPES = new Set(["observed_with", "associated_with"]);
+
+function countLabel(count, singular, plural) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+export function edgePresentation(link) {
+  const status = ["accepted", "proposed", "rejected"].includes(link?.status) ? link.status : "proposed";
+  const sourceCount = link?.citations?.length ?? 0;
+  return {
+    directional: !SYMMETRIC_TYPES.has(link?.relationship_type),
+    marker: `arrow-${status}`,
+    pattern: status === "accepted" ? null : status === "proposed" ? "6 5" : "2 6",
+    label: `${relationshipTypeLabel(link?.relationship_type)} · ${countLabel(sourceCount, "source", "sources")}`,
+  };
+}
+
+export function nodeAccessibleName(node) {
+  const metadata = node?.metadata ?? {};
+  const collection = metadata.collectionStatus === "none"
+    ? "No collection results"
+    : collectionStatusLabel(metadata.collectionStatus);
+  const provenance = node?.added_by === "agent" ? "added by agent" : "added by investigator";
+  const parts = [
+    `${node?.type ?? "entity"}: ${node?.value ?? ""}`,
+    provenance,
+    collection,
+    countLabel(metadata.evidenceCount ?? 0, "evidence entry", "evidence entries"),
+    countLabel(metadata.relationshipCount ?? 0, "relationship", "relationships"),
+  ];
+  if (node?.inPath) parts.push("included in traced path");
+  return parts.join("; ");
+}
 
 function isInActivityWindow(timestamp, cutoff) {
   const value = Date.parse(timestamp);
